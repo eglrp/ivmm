@@ -1,0 +1,7 @@
+[general]
+name=pyivmm
+version=0.1
+author=syh
+email=syhkiller@163.com
+qgisMinimumVersion=2.0
+description=pyvimm
