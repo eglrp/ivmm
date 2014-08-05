@@ -1,7 +1,6 @@
 #ifndef  ROAD_H
 #define  ROAD_H
 #include  <boost/operators.hpp>
-#include  <boost/format.hpp>
 #include  <string>
 #include  <functional>
 #include  <ostream>
@@ -154,7 +153,8 @@ public:
     }
 
     friend std::ostream& operator <<(std::ostream& o, CandidatePoint const& c){
-        return o << boost::format("%1%, %2%") % static_cast<Point>(c) % c.where;
+        //fmt::print("{}, {}", static_cast<Point>(c), c.where);
+        return o << static_cast<Point const&>(c) << " " << c.where ;
     }
 
 

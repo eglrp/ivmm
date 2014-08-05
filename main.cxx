@@ -6,8 +6,8 @@
 #include  <boost/property_tree/ptree.hpp>
 #include  <boost/property_tree/ini_parser.hpp>
 #include  <boost/property_tree/json_parser.hpp>
-#include  <boost/format.hpp>
 #include  <boost/filesystem.hpp>
+#include  <boost/filesystem/fstream.hpp>
 #include  <boost/exception/all.hpp>
 #include  <boost/timer.hpp>
 
@@ -18,6 +18,7 @@
 #include    "ivmm.h"
 #include    "json.h"
 #include    "debuger.hpp"
+#include    "format.h"
 
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
@@ -99,13 +100,15 @@ int main(int argc, char *argv[])
     boost::timer loader_timer;
     if (cross_filename.empty()){
         if ( not  network.load(road_filename ) ){
-            cerr << boost::format("load [%s] [%s] fail") % road_filename  % cross_filename << endl;
+            //cerr << boost::format("load [%s] [%s] fail") % road_filename  % cross_filename << endl;
+            fmt::print(cerr, "load [{:s}] [{:s} fail]", road_filename, cross_filename);
             return 1;
         }
 
     }else if ( not network.load( road_filename, cross_filename ) ){
     //if ( not  network.load( cross_filename, road_filename )){
-        cerr << boost::format("load [%s] fail") % road_filename << endl;
+        //cerr << boost::format("load [%s] fail") % road_filename << endl;
+        fmt::print(cerr, "load [{:s}] fail\n", road_filename);
         return 1;
     }
     cout << "load map in " << loader_timer.elapsed() << " second" << endl;
@@ -164,7 +167,7 @@ int main(int argc, char *argv[])
     }
 
     Evaluation evaluation(&network);
-    boost::format file_name_formater("%d_%d.geojson");
+    //boost::format file_name_formater("%d_%d.geojson");
     string filename;
     Path ivmm_path;
     Json::FastWriter geojson_string_writer;
@@ -183,11 +186,11 @@ int main(int argc, char *argv[])
             results = generator.launch ( cross_a, cross_b, k_shortest, launch_param );
         }
 
-        for (int k = 0; k < results.size(); ++k){
+        for (size_t k = 0; k < results.size(); ++k){
             //SimpleDebugDump debug;
-            filename = (file_name_formater % group % k).str();
+            filename = fmt::sprintf("{}_{}.geojson", group, k);
 
-            ofstream out_label((output_label_dir / filename).string());
+            fs::ofstream out_label(output_label_dir / filename);
             out_label << results[k].path.geojson_feature().toStyledString() << endl;
             out_label.close();
 
@@ -219,7 +222,7 @@ int main(int argc, char *argv[])
             debug.write(filename);*/
 
 
-            ofstream out_sample((output_sample_dir/ filename).string());
+            fs::ofstream out_sample(output_sample_dir/filename);
             out_sample << geojson_features( results[k].sample ).toStyledString() << endl;
             out_sample.close();
 
@@ -228,7 +231,7 @@ int main(int argc, char *argv[])
             cout << "pass to continue" << endl;cin.get();*/
 
 
-            ofstream out_ivmm( (output_ivmm_dir / filename ).string());
+            fs::ofstream out_ivmm(output_ivmm_dir/filename);
             out_ivmm << ivmm_path.geojson_feature().toStyledString() << endl;
             out_ivmm.close();
             PathInfo pathinfo1(results[k].path);
@@ -241,10 +244,10 @@ int main(int argc, char *argv[])
                 cout << "ivmm path has exception" << endl;
             }
             if ( pathinfo1.has_exception or pathinfo2.has_exception ){
-                ofstream ex1((output_exception/("exception_path_"+filename)).string());
+                fs::ofstream ex1(output_exception/("exception_path_"+filename));
                 ex1 << pathinfo1.path->geojson_feature().toStyledString() << endl;
                 ex1.close();
-                ofstream ex2((output_exception/("exception_ivmm_" + filename)).string());
+                fs::ofstream ex2(output_exception/("exception_ivmm_" + filename));
                 ex2 << pathinfo2.path->geojson_feature().toStyledString() << endl;
                 ex2.close();
                 ofstream p((output_exception/("exception_points_"+ filename)).string());

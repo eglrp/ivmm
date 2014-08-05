@@ -68,7 +68,6 @@ class ShortestPathController:
         feature.setAttributes([self.pointLayer.dataProvider().featureCount(), point.x(), point.y()])
         self.pointLayer.dataProvider().addFeatures([feature])
         self.pointLayer.updateExtents()
-        self.pointLayer.setCacheImage(None)
         self.mapCanvas.refresh()
 
     def onPickPoint( self, point, button ):

@@ -5,6 +5,9 @@ project (ivmm)
 find_package(PythonLibs REQUIRED)
 find_package(Boost REQUIRED COMPONENTS python unit_test_framework program_options filesystem system)
 
+add_subdirectory(cppformat)
+include_directories(cppformat)
+
 set(IVMM_SRC 
     util.cpp
     road.cpp
@@ -72,6 +75,7 @@ target_link_libraries(main
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
+    format
 )
 #add_library(ivmm_shared SHARED
 #    ${IVMM_SRC}
