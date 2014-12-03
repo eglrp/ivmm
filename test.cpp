@@ -9,6 +9,8 @@
 #include  <boost/algorithm/string.hpp>
 #include  <boost/range/algorithm.hpp>
 #include  <iostream>
+#include  <iomanip>
+#include  <ctime>
 #include  <type_traits>
 #include  <shapefil.h>
 #include  <cstdio>
@@ -21,24 +23,35 @@
 #include    "ivmm.h"
 #include    "key_visitor.hpp"
 #include    "evaluation.h"
-#include    "json.h" 
 #include    "debuger.hpp"
+#include    "format.h"
 using namespace std;
 using namespace boost::adaptors;
 void break_point(){}
 
+vector<GpsPoint> loadGps(string const& filename){
+    ifstream ins(filename);
+    string line;
+    vector<GpsPoint> gps;
+    vector<string> splitStr;
+
+    while ( getline( ins, line) ){
+        boost::split(splitStr, line, boost::is_any_of(","));
+        double x = atof( splitStr[2].c_str());
+        double y = atof( splitStr[3].c_str());
+        std::tm time;
+        strptime(splitStr[1].c_str(), "%Y-%m-%d %H:%M:%S", &time);
+        GpsPoint g(x, y, mktime(&time));
+        gps.push_back(g);
+    }
+
+    return gps;
+}
 
 BOOST_AUTO_TEST_SUITE(basic_classes)
 
     Network network;
-    BOOST_AUTO_TEST_CASE(point){
-        Point p(121,31);
-        cout << p.geojson_coordinates().toStyledString() << endl;
-        cout << p.geojson_geometry().toStyledString() << endl;
-        cout << p.geojson_properties().toStyledString() << endl;
-        cout << p.geojson_feature().toStyledString() << endl;
-    }
-
+/*
     BOOST_AUTO_TEST_CASE(roadsegment_test){
         Cross begin(0, "", 121.24661, 31.02633);
         Cross end(1, "", 121.25261,31.02765);
@@ -49,7 +62,7 @@ BOOST_AUTO_TEST_SUITE(basic_classes)
                 [](double acc, boost::tuple<Point, Point>const & points){
                 return acc + points.get<0>().gis_dist(points.get<1>());
                 });
-        
+
 
         RoadSegment roadseg(0, "", 80, true, begin, end, roadpoints);
 
@@ -83,7 +96,7 @@ BOOST_AUTO_TEST_SUITE(basic_classes)
 
         path = roadseg.path_follow(0, dist / dist_sum);
         BOOST_CHECK_EQUAL_COLLECTIONS(path.begin(), path.end(), roadseg.points.begin(), roadseg.points.begin()+2);
-        
+
         path = roadseg.path_follow(0,0);
         //BOOST_CHECK_EQUAL_COLLECTIONS(path.begin(), path.end(), roadseg.points.begin(), roadseg.points.begin()+1);
         BOOST_CHECK_EQUAL( path.size(), 0 );
@@ -93,13 +106,143 @@ BOOST_AUTO_TEST_SUITE(basic_classes)
         BOOST_CHECK_CLOSE(path[0].where , roadseg.points[1].where/2.0, 1e-6);
         BOOST_CHECK_EQUAL(path[1], roadseg.points[1]);
         BOOST_CHECK_CLOSE(path[2].where, roadseg.points[1].where/2.0 + 0.5, 1e-6);
-        
-        BOOST_ASSERT(network.load("/home/syh/Desktop/南京地图修正/road"));
+
+        BOOST_CHECK_EQUAL(network.load("/home/syh/Desktop/南京地图修正/road"), true);
+
         BOOST_CHECK_EQUAL(network.road(0)->points[0].belong, network.road(0));
         BOOST_CHECK_EQUAL(network.road(0)->points.back().belong, network.road(0));
         BOOST_CHECK_EQUAL(network.road(0)->points[network.road(0)->points.size()/2].belong, network.road(0));
     }
+*/
+/*
+    BOOST_AUTO_TEST_CASE(path_smooth_traj){
 
+        BOOST_CHECK_EQUAL( network.load("/home/syh/Desktop/北京地图修正/road"), true);
+        CandidateGraph graph;
+        vector<size_t> best_index;
+        IVMM ivmm(&network);
+        IVMMParamEX param;
+        param.candidate_limit = 5;
+        param.candidate_query_radious = 100;
+        param.project_dist_mean = 5;
+        param.project_dist_stddev = 10;
+        param.window = 50;
+        param.beta = 5000;
+
+        vector<GpsPoint> gps = loadGps("/home/syh/Desktop/final-part/8662(2008-02-05)-0-3.txt");
+        Path path = ivmm.ivmm_ex(gps, param, &graph, &best_index);
+
+        auto traj = path.smooth_trajectory();
+        SHPHandle shp = SHPCreate("traj", SHPT_ARC);
+        DBFHandle dbf = DBFCreate("traj");
+        DBFAddField(dbf, "enter", FTString, 20, 0);
+        DBFAddField(dbf, "leave", FTString, 20, 0);
+
+        char str[21];
+        for(auto& seg: traj){
+            size_t nv = seg.road->points.size();
+            double x[nv];
+            double y[nv];
+            boost::transform(seg.road->points, x, key_of(&Point::x));
+            boost::transform(seg.road->points, y, key_of(&Point::y));
+            SHPObject* obj = SHPCreateSimpleObject(SHPT_ARC, nv, x, y, nullptr);
+            int newID = SHPWriteObject(shp, -1, obj);
+            strftime(str, sizeof(str), "%Y-%m-%d %H:%M:%S", localtime(&seg.enter_timestamp));
+            DBFWriteStringAttribute(dbf, newID, 0, str);
+            strftime(str, sizeof(str), "%Y-%m-%d %H:%M:%S", localtime(&seg.leave_timestamp));
+            DBFWriteStringAttribute(dbf, newID, 1, str);
+            SHPDestroyObject(obj);
+        }
+
+        DBFClose(dbf);
+        SHPClose(shp);
+
+
+        vector<CandidatePoint> bestCandidates;
+        for ( size_t i = 0; i < best_index.size(); ++i){
+            bestCandidates.push_back( graph.candidates.at(i).at(best_index.at(i)));
+        }
+
+        shp = SHPCreate("bestCandidate", SHPT_POINT);
+        dbf = DBFCreate("bestCandidate");
+        DBFAddField(dbf, "vote", FTInteger, 10, 0);
+        DBFAddField(dbf, "fvalue", FTDouble, 10, 6);
+        DBFAddField(dbf, "timestamp", FTInteger, 20,0);
+        DBFAddField(dbf, "data", FTString, 20, 0);
+        for ( auto& c : bestCandidates){
+            SHPObject * obj = SHPCreateSimpleObject(SHPT_POINT, 1, & c.x, & c.y, nullptr);
+            int newID = SHPWriteObject(shp, -1, obj);
+            DBFWriteIntegerAttribute( dbf, newID, 0, c.vote);
+            DBFWriteDoubleAttribute( dbf, newID, 1, c.fvalue);
+            DBFWriteIntegerAttribute( dbf, newID, 2, c.timestamp);
+            tm time;
+            strftime( str, sizeof str, "%Y-%m-%d %H:%M:%S", localtime( & c.timestamp));
+            DBFWriteStringAttribute( dbf, newID, 3, str);
+            SHPDestroyObject(obj);
+        }
+        SHPClose(shp);
+        DBFClose(dbf);
+
+
+        vector< boost::tuple<PathPoint, size_t , size_t, size_t > > cross_pathpoint;
+        for ( size_t i = 0; i < path.points.size(); ++i ) {
+            if ( path.points.at(i).cid != -1 ) {
+                cross_pathpoint.push_back( {path.points.at(i), i, 0, 0} );
+            }
+        }
+
+        auto find_pre = [&path](size_t i) {
+            for (; i >= 0 and path.points[i].timestamp == -1; --i)
+                ;
+            return i;
+        };
+        auto find_next = [&path](size_t i ){
+            for (; i < path.points.size() and path.points[i].timestamp == -1; ++i)
+                ;
+            return i;
+        };
+
+        for ( auto& tup : cross_pathpoint ){
+            tup.get<2>() = find_pre( tup.get<1>() );
+            tup.get<3>() = find_next( tup.get<1>() );
+        }
+
+        shp = SHPCreate("cross", SHPT_POINT);
+        dbf = DBFCreate("cross");
+        DBFAddField(dbf, "prevIdx", FTInteger , 10, 0);
+        DBFAddField(dbf, "succIdx", FTInteger, 10, 0);
+        DBFAddField(dbf, "distToPrev", FTDouble, 10, 3);
+        DBFAddField(dbf, "distToSucc", FTDouble, 10, 3);
+        DBFAddField(dbf, "prev date", FTString, 20, 0);
+        DBFAddField(dbf, "succ date", FTString , 20, 0);
+        DBFAddField(dbf, "prev timetamp", FTInteger, 10, 0);
+        DBFAddField(dbf, "succ timestamp", FTInteger, 10, 0);
+
+        for( auto& tup: cross_pathpoint ){
+            PathPoint const& cross = tup.get<0>();
+            PathPoint const& prev = path.points.at(tup.get<2>());
+            PathPoint const& succ = path.points.at(tup.get<3>());
+
+            SHPObject* obj = SHPCreateSimpleObject(SHPT_POINT, 1, (double*)& cross.x, (double*)& cross.y, nullptr);
+            const int append = -1;
+            int newID = SHPWriteObject( shp, append, obj);
+            SHPDestroyObject(obj);
+            DBFWriteIntegerAttribute( dbf, newID, 0, tup.get<2>());
+            DBFWriteIntegerAttribute( dbf, newID, 1, tup.get<3>());
+            DBFWriteDoubleAttribute( dbf, newID, 2, cross.dist_of_path - prev.dist_of_path);
+            DBFWriteDoubleAttribute( dbf, newID, 3, succ.dist_of_path - cross.dist_of_path);
+            strftime( str, sizeof str, "%Y-%m-%d %H:%M:%S", localtime( & prev.timestamp) );
+            DBFWriteStringAttribute( dbf, newID, 4, str);
+            strftime( str, sizeof str, "%Y-%m-%d %H:%M:%S", localtime( & succ.timestamp) );
+            DBFWriteStringAttribute( dbf, newID, 5, str);
+            DBFWriteIntegerAttribute( dbf, newID, 6, prev.timestamp);
+            DBFWriteDoubleAttribute( dbf, newID, 7, succ.timestamp);
+        }
+
+        SHPClose(shp);
+        DBFClose(dbf);
+    }*/
+/*
     BOOST_AUTO_TEST_CASE(network_candidate_query){
         Point center(118.881350, 32.050881);
         Point center2(118.892355,32.046942);
@@ -132,7 +275,7 @@ BOOST_AUTO_TEST_SUITE(basic_classes)
 
         debug.add_point(p1, "unbound point 1");
         debug.add_point(p2, "unbound point 2");
-        
+
         CandidatePoint cp1 = network.project(p1);
         CandidatePoint cp2 = network.project(p2);
         debug.add_point(cp1, "candidate of p1")
@@ -155,10 +298,73 @@ BOOST_AUTO_TEST_SUITE(basic_classes)
         CandidatePoint c2 = network.project(Point(118.93638, 31.68304));
         break_point();
         network.shortest_path(c1, c2);
-        
-    }
+
+    }*/
 
 BOOST_AUTO_TEST_SUITE_END()
+/*
+#include  <boost/timer.hpp>
+
+BOOST_AUTO_TEST_SUITE(ivmm_ex)
+Network network;
+
+vector<GpsPoint> loadGps(string const& filename){
+    vector<GpsPoint> gps;
+    ifstream ins(filename);
+    string line;
+    vector<string> split_result;
+    while ( getline(ins, line) ){
+        split_result.clear();
+        boost::split(split_result, line, boost::is_any_of(","), boost::token_compress_off);
+        tm datetm;
+        strptime(split_result[1].c_str(), "%Y-%m-%d %H:%M:%S", &datetm);
+        time_t timestemp = mktime(&datetm);
+        double x = atof(split_result[2].c_str());
+        double y = atof(split_result[3].c_str());
+        gps.emplace_back(x, y, (long)timestemp);
+    }
+    ins.close();
+    return gps;
+}
+
+BOOST_AUTO_TEST_CASE(ivmmex){
+    break_point();
+    boost::timer timer;
+    BOOST_ASSERT( network.load("/home/syh/Desktop/北京地图修正/road"));
+    fmt::print("build network cost : {}\n", timer.elapsed() );
+    IVMM ivmm(&network);
+    vector<GpsPoint> gps = loadGps("/home/syh/Desktop/366-out.txt");
+    IVMMParamEX param;
+    param.project_dist_mean = 5;
+    param.project_dist_stddev = 10;
+    param.candidate_query_radious = 100;
+    param.candidate_limit = 5;
+    param.beta = 5000;
+    param.window = 100;
+
+    timer.restart();
+    Path path = ivmm.ivmm_ex( gps, param);
+    fmt::print("ivmm ex cost : {}\n", timer.elapsed());
+    ofstream o("/home/syh/Desktop/path.geojson");
+    o << path.geojson_feature() << endl;
+    o.close();
+
+    IVMMParam param2;
+    param2.project_dist_mean = 5;
+    param2.project_dist_stddev = 10;
+    param2.candidate_query_radious = 100;
+    param2.candidate_limit = 5;
+    param2.beta = 5000;
+    timer.restart();
+    path = ivmm.ivmm(gps, param2);
+    o.open("/home/syh/Desktop/path2.geojson");
+    fmt::print("ivmm cost:{}\n", timer.elapsed() );
+    o << path.geojson_feature() << endl;
+    o.close();
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+*/
 
     /*
 
@@ -175,7 +381,7 @@ void draw_point(Point const& p, const string& name){
 }
 
 template<typename Seq>
-typename enable_if<is_base_of<Point, typename Seq::value_type>::value,void>::type 
+typename enable_if<is_base_of<Point, typename Seq::value_type>::value,void>::type
 draw_path(Seq const& seq, string const& name){
     string base = boost::algorithm::erase_last_copy(name, ".shp");
     string shp_file = base + ".shp";
@@ -194,7 +400,7 @@ template<typename Seq>
 typename enable_if<is_same<Path, typename Seq::value_type>::value, void> ::type
 draw_paths(Seq const& seq, string const& name){
    string shp_file = boost::algorithm::erase_last_copy(name, ".shp") + ".shp";
-  SHPHandle shp = SHPCreate(shp_file.c_str(), SHPT_ARC); 
+  SHPHandle shp = SHPCreate(shp_file.c_str(), SHPT_ARC);
   for (auto& pth : seq){
     double x[pth.points.size()];
     double y[pth.points.size()];
@@ -222,13 +428,13 @@ BOOST_AUTO_TEST_CASE(network_kdtree_and_shortest_path_test){
     auto pth = network.shortest_path(6891,3182);
     draw_path(pth.points,"sp_1");
     cout << "shortest path from 6891 to 3182 cost : " << t.elapsed() << endl;
-    
+
     vector<PathPoint> points;
     for(int i = 0;  i < 10; ++i){
         points.push_back(pth.point_of_dist(i*100));
     }
     draw_points(points, "path_of_test");
-    
+
     auto cp1 = network.query(Point(121.43548,31.01197), 100, 1);
     auto cp2 = network.query(Point(121.4389,31.012517), 100, 1);
     pth = network.shortest_path(cp1[0], cp2[0]);
@@ -341,7 +547,7 @@ BOOST_AUTO_TEST_CASE(ivmm_test){
 
     break_point();
     auto path = ivmm.ivmm(gps, param);
-    
+
     draw_path(path.points, "ivmm_path_01");
     draw_points(path.points, "ivmm_path_points_01");
     path.points.resize(boost::algorithm::copy_if(path.points, path.points.begin(), [](PathPoint const& p){ return p.cid != -1; })
@@ -411,7 +617,7 @@ BOOST_AUTO_TEST_CASE(evaluation_test){
     SampleGenerator generator(&network);
     cout << "seed is " << generator.seed() << endl;
     vector<SampleResult> samples = generator.launch(2641, 5886, 1, param);
-   
+
 
     IVMMParam ivmm_param;
     ivmm_param.candidate_limit = 5;
@@ -454,7 +660,7 @@ BOOST_AUTO_TEST_CASE(evaluation_test){
                 //match_segments.push_back(matched);
             });
 
-    evaluation.walk(ivmm_info, labeld_info, 
+    evaluation.walk(ivmm_info, labeld_info,
             [&not_match_segments](Segment const& not_match){
                 not_match_segments.push_back(not_match);
             },
@@ -504,13 +710,13 @@ BOOST_AUTO_TEST_CASE(evaluation_test){
     boost::foreach_adjacent(samples[0].path.points, [](PathPoint const& first, PathPoint const& second){
                 if (not first.pos_equal(second)){
                     BOOST_CHECK_EQUAL( first.belong->id, second.belong->id );
-                } 
+                }
             });
     cout << "ivmm point test " << endl;
     boost::foreach_adjacent(ivmm_path.points, [](PathPoint const& first, PathPoint const& second){
                 if (not first.pos_equal(second)){
                     BOOST_CHECK_EQUAL( first.belong->id, second.belong->id );
-                } 
+                }
             });
     auto debug_pth = network.shortest_path_Astar(541, 17780);
     draw_path( debug_pth.points, "debug_541,17780" );* /

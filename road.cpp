@@ -1,4 +1,3 @@
-#include  <cassert>
 #include  <iostream>
 #include  <boost/range/adaptors.hpp>
 #include  <boost/range/algorithm.hpp>
@@ -8,11 +7,12 @@
 #include    "road.h"
 #include    "range_extend.hpp"
 #include    "key_visitor.hpp"
-#include    "json.h"
-
 
 using namespace std;
 
+double Point::gis_dist( Point const& other)const{
+    return sqrt(sqr_dist(other));
+}
 double Point::sqr_dist(double x, double y)const{
     return ( this->x - x ) * ( this->x - x ) + ( this->y - y ) * ( this->y - y );
 }
@@ -86,69 +86,17 @@ Point::SegmentPostion Point::on_segment(Point const& a, Point const& b)const{
     {
         return ON_RAY_OF_B;
     }
-    return WHTIN_IN_SEGMENT;
+    return WITHIN_SEGMENT;
 }
 
 
-Json::Value Point::geojson_coordinates()const{
-    return Json::EasyPutValue()
-        .append(x).append(y);
-}
-Json::Value  Point::geojson_geometry()const{
-    return Json::EasyPutValue()
-        .add("type", "Point")
-        .add("coordinates", geojson_coordinates() );
-}
-Json::Value Point::geojson_properties()const{
-    return Json::EasyPutValue()
-        .add("x", x)
-        .add("y",y);
-}
-
-Json::Value Point::geojson_feature()const{
-    return Json::EasyPutValue()
-        .add("type", "Feature")
-        .add("geometry", geojson_geometry())
-        .add("properties", geojson_properties() );
-}
-
-//========================================================================
-Json::Value GpsPoint::geojson_properties()const{
-    char time_str[32];
-    strftime(time_str, sizeof(time_str), "%Y %m %d %H:%M:%S", localtime( & timestamp ));
-    return 
-            Json::EasyPutValue()
-            .add("timestamp", timestamp)
-            .add("time", time_str)
-            .add("x", x)
-            .add("y", y);
-}
-//======================================================================
-Json::Value Cross::geojson_properties()const{
-    return  Json::EasyPutValue()
-                .add("id", id)
-                .add("dbID", dbId)
-                .add("x", x)
-                .add("y", y);
-}
-//=======================================================================
-Json::Value CandidatePoint::geojson_properties()const{
-    return Json::EasyPutValue()
-                .add("roadId", belong->id)
-                .add("roadDBID", belong->dbId)
-                .add("vote", vote)
-                .add("fvalue", fvalue)
-                .add("x", x)
-                .add("y", y);
-}
-//=====================================================================
 #include  <boost/range/numeric.hpp>
 void RoadSegment::init_with_points(vector<Point> const& points){
     length = boost::accumulate(points | boost::adjacented, 0.0, [](double init, boost::tuple<Point const&, Point const&> tup){
             return init + tup.get<0>().gis_dist(tup.get<1>());
             });
     double distanceSum = 0.0;
-    boost::copy_adjacent<boost::with_prepare>(points, std::back_inserter(this->points), 
+    boost::copy_adjacent<boost::with_prepare>(points, std::back_inserter(this->points),
             [this](Point const&){
                 CandidatePoint pnt;
                 pnt.x = this->begin.x;
@@ -167,7 +115,7 @@ void RoadSegment::init_with_points(vector<Point> const& points){
                 pnt.where = distanceSum / this->length;
                 return pnt;
         });
-    
+
     CandidatePoint& back = this->points.back();
     back.x = this->end.x;
     back.y = this->end.y;
@@ -182,7 +130,7 @@ CandidatePoint RoadSegment::candidate_at_dist(double where)const{
     auto iter = boost::lower_bound(points, where, [](CandidatePoint const& c, double value){
             return c.distance_from_begin() < value;
             });
-    
+
     if(iter == points.end())
         return points.back();
 
@@ -240,38 +188,4 @@ CandidatePoint RoadSegment::candidate_of(Point const& point)const{
 
     double dist_from_begin = min_mid_point.gis_dist(min_dist_segment.get<0>()) + min_dist_segment.get<0>().distance_from_begin();
     return candidate_at_dist(dist_from_begin);
-}
-
-Json::Value RoadSegment::geojson_coordinates()const{
-    Json::EasyPutValue coordinates;
-    for ( auto & c : points ){
-        coordinates.append(Json::EasyPutValue().append(c.x).append(c.y));
-    }
-    return coordinates;
-}
-Json::Value RoadSegment::geojson_properties()const{
-    return Json::EasyPutValue()
-                .add("id", id)
-                .add("dbId", dbId)
-                .add("speed", speed)
-                .add("bidir", bidir)
-                .add("length", length)
-                .add("begin", begin.id)
-                .add("beginDBID", begin.dbId)
-                .add("end", end.id)
-                .add("endDBID", end.dbId);
-
-}
-
-Json::Value RoadSegment::geojson_geometry()const{
-    return Json::EasyPutValue()
-        .add("type", "LineString")
-        .add("geometry",geojson_geometry() );
-}
-
-Json::Value RoadSegment::geojson_feature()const{
-    return Json::EasyPutValue()
-        .add("type", "Feature")
-        .add("geometry", geojson_geometry())
-        .add("properties", geojson_properties());
 }

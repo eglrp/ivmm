@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>485</width>
-    <height>300</height>
+    <width>356</width>
+    <height>222</height>
    </rect>
   </property>
   <property name="floating">
@@ -17,7 +17,7 @@
    <string>pyivmm</string>
   </property>
   <widget class="QWidget" name="dockWidgetContents">
-   <layout class="QHBoxLayout" name="horizontalLayout">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="enabled">
@@ -82,6 +82,27 @@
          </layout>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <item>
+           <widget class="QLabel" name="label_7">
+            <property name="text">
+             <string>路口</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="crossLineEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="goToCrossButton">
+            <property name="text">
+             <string>前往</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <spacer name="verticalSpacer_2">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -95,6 +116,10 @@
          </spacer>
         </item>
        </layout>
+       <zorder>label_7</zorder>
+       <zorder>crossLineEdit</zorder>
+       <zorder>label_7</zorder>
+       <zorder>goToCrossButton</zorder>
       </widget>
       <widget class="QWidget" name="shortestPathTab">
        <property name="enabled">
@@ -168,7 +193,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="gps_loader">
+      <widget class="QWidget" name="gpsTab">
        <property name="enabled">
         <bool>false</bool>
        </property>
@@ -176,26 +201,6 @@
         <string>GPS加载</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_2">
-        <item row="0" column="4">
-         <widget class="QPushButton" name="gps_log_loader">
-          <property name="text">
-           <string>加载GPS数据</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QLineEdit" name="candidate_main_end"/>
-        </item>
-        <item row="2" column="3">
-         <widget class="QLineEdit" name="candidate_sub_start"/>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="label_10">
-          <property name="text">
-           <string>结束采样点编号</string>
-          </property>
-         </widget>
-        </item>
         <item row="4" column="2">
          <spacer name="verticalSpacer_3">
           <property name="orientation">
@@ -209,106 +214,75 @@
           </property>
          </spacer>
         </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="label_7">
+        <item row="0" column="4">
+         <widget class="QPushButton" name="gpsLoadButton">
           <property name="text">
-           <string>起始采样点编号</string>
+           <string>加载GPS数据</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="2">
-         <widget class="QLabel" name="label_8">
-          <property name="text">
-           <string>候选编号</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QLineEdit" name="candidate_main_start"/>
-        </item>
-        <item row="3" column="2">
-         <widget class="QLabel" name="label_9">
-          <property name="text">
-           <string>候选编号</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="3">
-         <widget class="QLineEdit" name="candidate_sub_end"/>
-        </item>
-        <item row="1" column="4">
-         <widget class="QPushButton" name="candidate_to_map">
+        <item row="2" column="4">
+         <widget class="QPushButton" name="candidateCreateButton">
           <property name="text">
            <string>生成候选点</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="4">
-         <widget class="QPushButton" name="compute_candidate_path">
-          <property name="text">
-           <string>候选点最短路径</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="4">
-         <widget class="QLabel" name="candidate_path_length_show">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="3">
-         <widget class="QSpinBox" name="topk">
-          <property name="maximum">
-           <number>1000</number>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0" colspan="2">
-         <widget class="QLineEdit" name="gps_log_show">
-          <property name="readOnly">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QLabel" name="label_15">
-          <property name="text">
-           <string>top-k</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
+        <item row="2" column="0">
          <widget class="QLabel" name="label_6">
           <property name="text">
            <string>半径</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="1">
-         <widget class="QDoubleSpinBox" name="radiou_query_candidate">
+        <item row="2" column="1">
+         <widget class="QDoubleSpinBox" name="radiousSpine">
           <property name="maximum">
            <double>500.000000000000000</double>
           </property>
          </widget>
         </item>
-        <item row="1" column="2">
+        <item row="2" column="2">
          <widget class="QLabel" name="label_17">
           <property name="text">
            <string>限制</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="3">
-         <widget class="QSpinBox" name="candidate_limit">
+        <item row="2" column="3">
+         <widget class="QSpinBox" name="limitSpine">
           <property name="minimum">
            <number>1</number>
           </property>
          </widget>
         </item>
+        <item row="3" column="4">
+         <widget class="QPushButton" name="trajLoadButton">
+          <property name="text">
+           <string>轨迹加载</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0" colspan="4">
+         <widget class="QLineEdit" name="trajText"/>
+        </item>
+        <item row="0" column="0" colspan="4">
+         <widget class="QLineEdit" name="gpsFileLineEdit">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="4">
+         <widget class="QPushButton" name="rawTrajButton">
+          <property name="text">
+           <string>原始轨迹</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="ivmm">
+      <widget class="QWidget" name="ivmmTab">
        <property name="enabled">
         <bool>false</bool>
        </property>
@@ -316,7 +290,68 @@
         <string>IVMM</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_3">
-        <item row="5" column="1">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_11">
+          <property name="text">
+           <string>偏差距离均值</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="projectDistMuLineEdit"/>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLabel" name="label_12">
+          <property name="text">
+           <string>偏差标准差</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QLineEdit" name="projectDistStddevLineEdit"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_13">
+          <property name="text">
+           <string>距离加权参数</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="betaLineEdit"/>
+        </item>
+        <item row="1" column="2">
+         <widget class="QLabel" name="label_14">
+          <property name="text">
+           <string>候选半径</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLineEdit" name="queryRadiousLineEdit"/>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_16">
+          <property name="text">
+           <string>候选点数量限制</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="candidateLimitSpine">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QPushButton" name="ivmmComputeButton">
+          <property name="text">
+           <string>生成</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0" colspan="4">
          <spacer name="verticalSpacer_5">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -328,67 +363,6 @@
            </size>
           </property>
          </spacer>
-        </item>
-        <item row="0" column="2">
-         <widget class="QPushButton" name="compute_best_candidate_button">
-          <property name="text">
-           <string>计算最佳候选点</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_11">
-          <property name="text">
-           <string>候选点偏差距离均值</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QLineEdit" name="param_mu"/>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_12">
-          <property name="text">
-           <string>偏差距离标准差</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QLineEdit" name="param_sigma"/>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="label_13">
-          <property name="text">
-           <string>距离加权参数</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QLineEdit" name="param_beta"/>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="label_14">
-          <property name="text">
-           <string>候选半径</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QLineEdit" name="param_radious"/>
-        </item>
-        <item row="4" column="0">
-         <widget class="QLabel" name="label_16">
-          <property name="text">
-           <string>候选点数量限制</string>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="1">
-         <widget class="QSpinBox" name="ivmm_candidate_limit">
-          <property name="minimum">
-           <number>1</number>
-          </property>
-         </widget>
         </item>
        </layout>
       </widget>
@@ -402,21 +376,11 @@
   <tabstop>beginPointLineEdit</tabstop>
   <tabstop>endPointLineEdit</tabstop>
   <tabstop>pickPointButton</tabstop>
-  <tabstop>gps_log_show</tabstop>
-  <tabstop>topk</tabstop>
-  <tabstop>candidate_main_start</tabstop>
-  <tabstop>candidate_sub_start</tabstop>
-  <tabstop>candidate_main_end</tabstop>
-  <tabstop>candidate_sub_end</tabstop>
-  <tabstop>gps_log_loader</tabstop>
-  <tabstop>candidate_to_map</tabstop>
-  <tabstop>compute_candidate_path</tabstop>
-  <tabstop>param_mu</tabstop>
-  <tabstop>param_sigma</tabstop>
-  <tabstop>param_beta</tabstop>
-  <tabstop>param_radious</tabstop>
-  <tabstop>ivmm_candidate_limit</tabstop>
-  <tabstop>compute_best_candidate_button</tabstop>
+  <tabstop>gpsFileLineEdit</tabstop>
+  <tabstop>gpsLoadButton</tabstop>
+  <tabstop>candidateCreateButton</tabstop>
+  <tabstop>projectDistMuLineEdit</tabstop>
+  <tabstop>betaLineEdit</tabstop>
  </tabstops>
  <resources/>
  <connections/>

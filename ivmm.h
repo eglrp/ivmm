@@ -43,15 +43,15 @@ struct StaticMatrix{
     }
 
     inline size_t col()const{
-        return _ft[0].size();
+        return _ft.at(0).size();
     }
 
     inline double fs(size_t s, size_t d)const{
-        return _c[d] * _v[s][d];
+        return _c.at(d) * _v.at(s).at(d);
     }
 
     inline double ft(size_t s, size_t d)const{
-        return _ft[s][d];
+        return _ft.at(s).at(d);
     }
 
     inline double fst(size_t s, size_t d)const{
@@ -83,6 +83,8 @@ struct CandidateGraph{
     std::vector<std::vector<std::vector<Path> > > paths;
 };
 
+
+
 struct IVMMParam{
     double candidate_query_radious;
     int candidate_limit;
@@ -90,27 +92,50 @@ struct IVMMParam{
     double project_dist_stddev;
     double beta;
 };
+struct IVMMParamEX: public IVMMParam{
+    int window;
+};
 
 class IVMM{
 public:
     IVMM(Network* network):_network(network){}
 
-    Path ivmm(std::vector<GpsPoint> const& gps_points, IVMMParam const& param , 
+    Path ivmm(
+            std::vector<GpsPoint> const& gps_points, 
+            IVMMParam const& param , 
             CandidateGraph * pgraph = nullptr, 
             std::vector<size_t> * pfinal_candidate_index = nullptr)const;
 
+
+    Path ivmm_ex(
+            std::vector<GpsPoint> const& gps_points, 
+            IVMMParamEX const& param,
+            CandidateGraph * pgraph = nullptr,
+            std::vector<size_t> * pfinal_candidate_index = nullptr)const;
+
     CandidateGraph
-        build_candidate_graph(std::vector<GpsPoint> const& gps_points, IVMMParam const& param)const;
+        build_candidate_graph(std::vector<GpsPoint> const& gps_points, size_t limit, double radious)const;
 
     std::vector<StaticMatrix>
         build_static_matrixs(CandidateGraph const& graph, IVMMParam const& param)const;
 
+    std::vector<StaticMatrix>
+        build_static_matrixs_ex(CandidateGraph const& graph, IVMMParamEX const& param)const;
+
     std::vector<CandidatePoint*>
-        find_sequence(CandidateGraph & graph, std::vector<StaticMatrix> & matrixs, IVMMParam const& param, size_t i, size_t k)const;
+        find_sequence(CandidateGraph & graph, 
+                std::vector<StaticMatrix> & matrixs, 
+                double dist_mean, double dist_stddev, 
+                size_t i, size_t k)const;
+
+    std::vector<CandidatePoint*>
+        find_sequence_ex(CandidateGraph & graph,
+                std::vector<StaticMatrix> & matrixs,
+                double dist_mean, double dist_stddev,
+                int begin, int end,
+                size_t i, size_t k)const;
 
 private:
     Network* _network;
-
-
 };
 #endif  /*IVMM_H*/

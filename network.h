@@ -9,10 +9,6 @@
 #include  <unordered_map>
 #include    "road.h"
 
-
-namespace Json{
-    class Value;
-}
 struct kdtree_node{
     CandidatePoint point;
     int split = 0;
@@ -37,10 +33,17 @@ struct PathPoint: public CandidatePoint{
     PathPoint(CandidatePoint const& c):CandidatePoint(c){}
     double dist_of_path = 0.0;
     int cid = -1;
-
-    virtual Json::Value geojson_properties()const override;
 };
 
+
+
+struct SmoothTrajectorySegment{
+    RoadSegment const* road;
+    Cross const* begin;
+    Cross const* end;
+    long enter_timestamp;
+    long leave_timestamp;
+};
 class Path: boost::equality_comparable<Path>{
 public:
     Path()=default;//empty one
@@ -72,13 +75,13 @@ public:
         return p;
     }
 
+    void estimate_time_at_cross();
+
+    std::vector<SmoothTrajectorySegment> smooth_trajectory()const;
+
 
     bool append(Path const& other);
 
-    Json::Value geojson_coordinates()const;
-    Json::Value geojson_geometry()const;
-    Json::Value geojson_properties()const;
-    Json::Value geojson_feature()const;
 };
 
 
@@ -92,17 +95,18 @@ public:
     virtual ~Network();
     size_t kdtree_deep()const;
 
+    std::vector<CandidatePoint> query(GpsPoint const&, double radious)const;
+    std::vector<CandidatePoint> query(GpsPoint const&, double radious, int limit)const;
     std::vector<CandidatePoint> query(Point const&, double radious)const;
-
     std::vector<CandidatePoint> query(Point const&, double radious, int limit)const;
 
-    
+
     Path shortest_path(Cross const& begin, Cross const& end)const;
     inline Path shortest_path(int begin, int end)const{
         return shortest_path(_cross[begin], _cross[end]);
     }
 
-    
+
     Path shortest_path_Astar(Cross const& begin, Cross const& end)const;
     inline Path shortest_path_Astar(int begin, int end)const{
         return shortest_path_Astar(_cross[begin], _cross[end]);
@@ -127,17 +131,16 @@ public:
 
 
     std::vector<adjacent_edge const*>
-    shortest_path_Astar(int begin, int end, 
-            std::unordered_set<int> const& deleted_cross, 
+    shortest_path_Astar(int begin, int end,
+            std::unordered_set<int> const& deleted_cross,
             std::unordered_set<adjacent_edge const*> const& deleted_edge)const;
-    
 
     inline int cross_bound()const{ return _cross.size(); }
     inline int roadsegment_bound()const{ return _road_segment.size();}
     inline Cross const& cross(int i)const{ return _cross[i]; }
     inline Cross const& cross(std::string const& dbId)const{ return _cross[_cross_db_id_map.at(dbId)]; }
     RoadSegment const* road(int i ) const{ return &_road_segment[i]; }
-    RoadSegment const* road(std::string const& dbId)const{ return & _road_segment[_cross_db_id_map.at(dbId)]; }
+    RoadSegment const* road(std::string const& dbId)const{ return & _road_segment[_road_db_id_map.at(dbId)]; }
 
     CandidatePoint project(Point const& p)const;
 
@@ -145,15 +148,57 @@ public:
 
     void save_cross_to_map(std::string const& name)const;
 
+    adjacent_edge const* edge(int from, int to)const
+    {
+        for (auto& e : _adjacent.at(from))
+        {
+            if (e.end == to)
+                return &e;
+        }
+        return nullptr;
+    }
+
+    adjacent_edge const* edge(std::string const& from, std::string const& to )const
+    {
+        int ifrom = _cross_db_id_map.at(from);
+        int ito = _cross_db_id_map.at(to);
+        return edge(ifrom ,ito);
+    }
+
+    std::vector<std::vector<adjacent_edge> >& adjacent_table(){
+        return _adjacent;
+    }
+
+    std::vector<std::vector<adjacent_edge> > const& adjacent_table()const{
+        return _adjacent;
+    }
+
+    bool contain_cross(int i)const{
+        if ( i < 0 || i >= cross_bound() )
+            return false;
+        return true;
+    }
+    bool contain_cross(std::string const& id)const{
+        return _cross_db_id_map.count(id) > 0;
+    }
+    bool contain_road(int i )const{
+        if ( i < 0 || i >= roadsegment_bound() )
+            return false;
+        return true;
+    }
+    bool contain_road(std::string const& id)const{
+        return _road_db_id_map.count(id) > 0;
+    }
 private:
     kdtree_node* _root = nullptr;
     std::vector<std::vector<adjacent_edge> > _adjacent;
     std::vector<Cross> _cross;
     std::vector<RoadSegment> _road_segment;
-    Path _shortest_path(CandidatePoint const& begin, CandidatePoint const& end, 
+    Path _shortest_path(CandidatePoint const& begin, CandidatePoint const& end,
             Path (Network::*cross2cross_shortest_path)(Cross const&,Cross const&)const)const;
 
     std::unordered_map<std::string , int>  _cross_db_id_map;
+    std::unordered_map<std::string , int > _road_db_id_map;
     std::string _saved_shp_name;
 };
 

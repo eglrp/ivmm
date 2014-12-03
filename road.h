@@ -5,11 +5,8 @@
 #include  <functional>
 #include  <ostream>
 #include  <vector>
+#include  <boost/format.hpp>
 #include    "util.h"
-
-namespace Json{
-    class Value;
-}
 
 class Point:
     boost::equality_comparable1<Point, boost::additive1<Point, boost::multipliable<Point, double> > >{
@@ -43,7 +40,7 @@ public:
     enum SegmentPostion{
         OUT_OF_SEGMENT,
         ON_RAY_OF_A,
-        WHTIN_IN_SEGMENT,
+        WITHIN_SEGMENT,
         ON_RAY_OF_B
     };
     SegmentPostion on_segment(Point const& a, Point const& b)const;
@@ -74,9 +71,10 @@ public:
         return *this;
     }
 
-    inline double gis_dist(Point const& other)const{
-        return gis_distance(x, y, other.x, other.y);
-    }
+    double gis_dist(Point const& other)const;
+    //inline double gis_dist(Point const& other)const;//{
+        //return gis_distance(x, y, other.x, other.y);
+    //}
 
     double& operator[](int idx){
         if(idx == 0) return x;
@@ -86,16 +84,11 @@ public:
         if(idx == 0) return x;
         return y;
     }
-    
+
     friend std::ostream& operator<<(std::ostream& o, Point const& p){
-        return o << p.x << ", " << p.y;
+        return o << boost::format("%.6f,%.6f") % p.x % p.y;
     }
 
-
-    Json::Value geojson_coordinates()const;
-    Json::Value geojson_geometry()const;
-    Json::Value geojson_feature()const;
-    virtual Json::Value geojson_properties()const;
 };
 
 
@@ -109,8 +102,6 @@ public:
     inline bool operator ==(GpsPoint const& other)const{
         return static_cast<Point const&>(*this) == static_cast<Point const&>(other) and timestamp == other.timestamp;
     }
-
-    Json::Value geojson_properties()const override;
 };
 
 class Cross:public Point, boost::equality_comparable<Cross, boost::equality_comparable<Point, Cross> >{
@@ -118,20 +109,16 @@ public:
     int  id;
     std::string dbId;
     Cross()=default;
-    
+
     template<typename String>
     Cross(int id, String&& dbid, double x, double y):Point(x,y),id(id), dbId(std::forward<String>(dbid)){}
 
     bool operator==(Cross const & other)const{
         return id == other.id;
     }
-
-    virtual Json::Value geojson_properties()const;
 };
 
 class RoadSegment;
-
-
 class CandidatePoint:public Point, boost::equality_comparable1<CandidatePoint, boost::equality_comparable<Point, CandidatePoint>>{
 public:
     CandidatePoint()=default;
@@ -147,6 +134,7 @@ public:
     double distance_to_end()const;
     int vote = 0;
     double fvalue = 0.0;
+    long timestamp = -1;//may be used
 
     bool operator==(CandidatePoint const& other)const{
         return belong == other.belong and this->pos_equal(other);
@@ -156,9 +144,6 @@ public:
         //fmt::print("{}, {}", static_cast<Point>(c), c.where);
         return o << static_cast<Point const&>(c) << " " << c.where ;
     }
-
-
-    virtual Json::Value geojson_properties()const override;
 };
 
 class RoadSegment:boost::equality_comparable<RoadSegment>{
@@ -175,7 +160,7 @@ public:
     RoadSegment()=default;
     template<typename DBID>
     RoadSegment(int id,  DBID&& dbId, double speed, bool bidir,
-            Cross const& begin, Cross const& end, 
+            Cross const& begin, Cross const& end,
             std::vector<Point> const& points):id(id),dbId(std::forward<DBID>(dbId)),speed(speed),
     bidir(bidir), begin(begin),end(end){
         init_with_points(points);
@@ -249,11 +234,6 @@ public:
     bool operator==(RoadSegment const& other)const{
         return id == other.id;
     }
-
-    Json::Value geojson_coordinates()const;
-    Json::Value geojson_geometry()const;
-    Json::Value geojson_properties()const;
-    Json::Value geojson_feature()const;
 private:
     void init_with_points(std::vector<Point>const& points);
 };

@@ -17,23 +17,51 @@
 #include    "key_visitor.hpp"
 #include    "range_extend.hpp"
 #include    "evaluation.h"
-#include    "json.h"
+#include "pathendpointwalker.hpp"
 
 using namespace std;
 using namespace boost::assign;
 
 const double sample_step = 200.0;
 
-
-Json::Value PathPoint::geojson_properties()const{
-    return Json::EasyPutValue()
-                .add("x", x)
-                .add("y", y)
-                .add("roadId", belong->id)
-                .add("roadDBId", belong->dbId)
-                .add("corss", cid);
-}
 //=======================================================================
+void Path::estimate_time_at_cross()
+{
+    auto estimateTime = [&](vector<PathPoint>::iterator it)
+    {
+        if ( it->timestamp != -1) return it->timestamp;
+        PathPoint const& p2 = *find_if(it + 1, points.end(), [](PathPoint const& p ){ return p.timestamp != -1;});
+        PathPoint const& p1 = *boost::find_if(boost::make_iterator_range(points.begin(), it) | boost::adaptors::reversed,
+                [](PathPoint const& p){return p.timestamp != -1;} );
+        double d = p2.dist_of_path - p1.dist_of_path;
+        double d1 = it->dist_of_path - p1.dist_of_path;
+        double d2 = p2.dist_of_path - it->dist_of_path;
+        long t1 = p1.timestamp;
+        long t2 = p2.timestamp;
+        long t = (t1 + t2) / 2;
+        if ( d != 0.0)
+        {
+            t = d1 / d * t2 + d2 /d * t1;
+        }
+        it->timestamp = t;
+        return t;
+    };
+    PathEndpointWalker<Path> walker(*this);
+    while ( not walker.isEnd() )
+    {
+        if (walker.first != points.begin() -1 and walker.first->cid != -1)
+        {
+            estimateTime(walker.first);
+        }
+        if ( walker.second != points.end() and walker.second->cid != -1)
+        {
+            estimateTime(walker.second);
+        }
+        ++walker;
+    }
+}
+
+
 Path::Path(vector<CandidatePoint> const& cps):points(cps.begin(),cps.end()){
     if (not points.empty())
         update();
@@ -55,15 +83,13 @@ bool Path::append(Path const& other){
         return true;
     }
 
-
-
     PathPoint const& back = points.back();
     PathPoint const& front = other.points.front();
-    if ( back.pos_equal( front ) 
-        and ( 
-                back.belong == front.belong 
-              or 
-                ( back.cid == front.cid and back.cid != -1  ) 
+    if ( back.pos_equal( front )
+        and (
+                back.belong == front.belong
+              or
+                ( back.cid == front.cid and back.cid != -1  )
             )
         ) {
         boost::copy(other.points, back_inserter(points));
@@ -77,12 +103,12 @@ bool Path::append(Path const& other){
     //copy( other.points.begin() + 1, other.points.end(), back_inserter(points) );
     //boost::copy(other.points, back_inserter(points));
     //update();
-    //return true; 
+    //return true;
 }
 
 void Path::update(){
     /*points.resize(
-            boost::unique<boost::return_begin_found>(points, 
+            boost::unique<boost::return_begin_found>(points,
                 [](Point const& a, Point const& b){ return a.pos_equal(b); }
             ).size()
     );*/
@@ -110,7 +136,7 @@ void Path::update(){
 }
 
 bool Path::operator==(Path const& other)const{
-    return double_nearly_equal(length, other.length) 
+    return double_nearly_equal(length, other.length)
         and boost::equal(points , other.points, [](Point const& a, Point const& b){ return a.pos_equal(b); }) ;
 }
 
@@ -175,35 +201,77 @@ PathPoint Path::point_of_dist(double where)const{
     return cp;
 }
 
-Json::Value Path::geojson_coordinates()const{
-    Json::EasyPutValue line_json;
-    for (auto& p : points){
-        line_json.append( p.geojson_coordinates() );
+pair< PathPoint const*, PathPoint const* > get_time_bound_point( size_t i,  vector<PathPoint> const& points){
+    if ( points.at(i).timestamp != -1 ){
+        return { & points.at(i), & points.at(i) };
+    }
+    int pre, next;
+    for(pre = i - 1; pre >= 0 and points.at(pre).timestamp == -1; --pre)
+        ;
+    for(next = i + 1; next < points.size() and points.at(next).timestamp == -1; ++next)
+        ;
+    PathPoint const* first = nullptr;
+    PathPoint const* last = nullptr;
+    if ( pre >= 0) {
+        first = &points.at(pre);
     }
 
-    return line_json;
+    if ( next < points.size() ){
+        last = &points.at(next);
+    }
+
+    return { first, last};
 }
-Json::Value Path::geojson_geometry()const{
-    return Json::EasyPutValue()
-        .add("type", "LineString")
-        .add("coordinates", geojson_coordinates());
+
+vector<SmoothTrajectorySegment> Path::smooth_trajectory()const{
+    vector<SmoothTrajectorySegment> traj;
+
+    vector< pair<PathPoint, size_t> > index;
+    for ( size_t i = 0; i < points.size(); ++i ){
+        if ( points.at(i).cid != -1 ) {
+            index.push_back( {points.at(i), i } );
+        }
+    }
+
+    for ( auto& element : index ){
+        auto time_bound_point = get_time_bound_point(element.second, points);
+        if ( time_bound_point.first == nullptr or time_bound_point.second == nullptr)
+            continue;
+        if ( time_bound_point.first == time_bound_point.second){
+            element.first.timestamp = time_bound_point.first->timestamp;
+        }else {
+            double dist_pre = element.first.dist_of_path - time_bound_point.first->dist_of_path;
+            double dist_next = time_bound_point.second->dist_of_path - element.first.dist_of_path;
+            double dist = dist_next + dist_pre;
+            long timestamp_pre = time_bound_point.first->timestamp;
+            long timestamp_next = time_bound_point.second->timestamp;
+            long timestamp;
+            if ( dist == 0 ) timestamp = ( timestamp_pre + timestamp_next)  / 2;
+            else {
+                timestamp = timestamp_pre / dist * dist_next + timestamp_next / dist * dist_pre;
+            }
+            element.first.timestamp = timestamp;
+        }
+    }
+
+    boost::foreach_adjacent( index | boost::adaptors::transformed(key_of(& pair<PathPoint, size_t>::first) ),
+        [&traj](PathPoint const& first, PathPoint const& second) {
+            assert(first.cid != -1 and second.cid != -1);
+            if ( first.belong == second.belong and first.cid != second.cid ){
+                SmoothTrajectorySegment seg;
+                seg.road = first.belong;
+                seg.begin = first.cid == seg.road->begin.id? & seg.road->begin : & seg.road->end;
+                seg.end = second.cid == seg.road->begin.id? & seg.road->begin : & seg.road->end;
+                seg.enter_timestamp = first.timestamp;
+                seg.leave_timestamp = second.timestamp;
+                traj.push_back(seg);
+            }
+    });
+    size_t new_size = boost::unique<boost::return_begin_found>(traj, binary_of<equal_to> (&SmoothTrajectorySegment::road)).size();
+    traj.resize(new_size);
+    return traj;
 }
-Json::Value Path::geojson_properties()const{
-    return Json::EasyPutValue()
-        .add("begin_x", points.empty() ? 0: points.front().x)
-        .add("begin_y", points.empty() ? 0: points.front().y)
-        .add("begin_cid", points.empty() ? -1 : points.front().cid)
-        .add("end_x", points.empty() ? 0 : points.back().x)
-        .add("end_y", points.empty() ? 0 : points.back().y)
-        .add("end_cid", points.empty() ? 0 : points.back().cid)
-        .add("length", length);
-}
-Json::Value Path::geojson_feature()const{
-   return Json::EasyPutValue()
-      .add("type", "Feature")
-      .add("geometry", geojson_geometry() )
-      .add("properties", geojson_properties());
-}
+
 //=========================================================================================
 static vector<Point> point_from_padXY(double* x, double* y, int n){
     vector<Point> points;
@@ -276,6 +344,7 @@ bool Network::load(string const& shp){
     _road_segment.clear();
     _adjacent.clear();
     _cross_db_id_map.clear();
+    _road_db_id_map.clear();
     if ( _root ) kdtree_free(_root);
 
 
@@ -313,8 +382,6 @@ bool Network::load(string const& shp){
     const int SingleForward = 2;
     const int SingleBackward = 3;
     for ( int i = 0; i < count_of_record; ++i ){
-        if ( DBFIsRecordDeleted( hdbf, i ) )
-            continue;
 
         int new_road_id = _road_segment.size();
         dbid = DBFReadStringAttribute(hdbf, i, DBID);
@@ -370,7 +437,8 @@ bool Network::load(string const& shp){
         int begin_id = _cross_db_id_map[snodeID];
         int end_id = _cross_db_id_map[enodeID];
 
-        _road_segment.emplace_back(new_road_id, std::move(dbid), speed, bidir, _cross[begin_id], _cross[end_id], points);
+        _road_segment.emplace_back(new_road_id, dbid, speed, bidir, _cross[begin_id], _cross[end_id], points);
+        _road_db_id_map[dbid] = new_road_id;
     }
 
     _adjacent.resize(_cross.size());
@@ -384,6 +452,7 @@ bool Network::load(string const& shp){
     _root = build_kdtree ( _road_segment );
     SHPClose(hshp);
     DBFClose(hdbf);
+
     return true;
 }
 
@@ -391,6 +460,8 @@ bool Network::load(string const& road, string const& cross){
     _cross.clear();
     _road_segment.clear();
     _adjacent.clear();
+    _road_db_id_map.clear();
+    _cross_db_id_map.clear();
     if ( _root ) kdtree_free(_root);
 
     namespace fs = boost::filesystem;
@@ -460,8 +531,6 @@ bool Network::load(string const& road, string const& cross){
     const int SingleForward = 2;
     const int SingleBackward = 3;
     for ( int i = 0; i < count_of_record; ++i ){
-        if ( DBFIsRecordDeleted( hdbf, i ) )
-            continue;
 
         int new_road_id = _road_segment.size();
         dbid = DBFReadStringAttribute(hdbf, i, DBID);
@@ -506,7 +575,8 @@ bool Network::load(string const& road, string const& cross){
         int begin_id = _cross_db_id_map[snodeID];
         int end_id = _cross_db_id_map[enodeID];
 
-        _road_segment.emplace_back(new_road_id, std::move(dbid), speed, bidir, _cross[begin_id], _cross[end_id], points);
+        _road_segment.emplace_back(new_road_id, dbid, speed, bidir, _cross[begin_id], _cross[end_id], points);
+        _road_db_id_map[dbid] = new_road_id;
     }
 
     _adjacent.resize(_cross.size());
@@ -529,13 +599,13 @@ static size_t kdtree_deep(kdtree_node* node){
 }
 
 size_t Network::kdtree_deep()const{
-    return ::kdtree_deep(_root); 
+    return ::kdtree_deep(_root);
 }
 
 
 
 void kdtree_query(vector<CandidatePoint>& ret, kdtree_node* tree, double radious, Point const& p){
-    if(tree == nullptr) return; 
+    if(tree == nullptr) return;
 
     if(p.gis_dist(tree->point) < radious){
         ret += tree->point;
@@ -580,6 +650,18 @@ vector<CandidatePoint> Network::query(Point const& point, double radious, int li
             });
     result.resize(std::min((size_t)limit, result.size()));
     return result;
+}
+
+
+vector<CandidatePoint> Network::query(GpsPoint const& point, double radious)const{
+    auto points = query(static_cast<Point const&>(point), radious);
+    for(auto& p : points) p.timestamp = point.timestamp;
+    return points;
+}
+vector<CandidatePoint> Network::query(GpsPoint const& point, double radious, int limit)const{
+    auto points = query(static_cast<Point const&>(point), radious, limit);
+    for(auto& p : points) p.timestamp = point.timestamp;
+    return points;
 }
 
 #include  <queue>
@@ -672,6 +754,13 @@ static CandidatePoint from_cross(RoadSegment* rd, Cross const& c){
     return rd->points.back();
 }
 
+static Path& attach_timestamp(Path & path, CandidatePoint const& begin, CandidatePoint const& end){
+    if (not path.points.empty()){
+        path.points.front().timestamp = begin.timestamp;
+        path.points.back().timestamp = end.timestamp;
+    }
+    return path;
+}
 #include  <boost/range/algorithm_ext.hpp>
 Path Network::_shortest_path(CandidatePoint const& begin, CandidatePoint const& end,
         Path (Network::*cross2cross_shortest_path)(Cross const&,Cross const&)const )const{
@@ -693,9 +782,9 @@ Path Network::_shortest_path(CandidatePoint const& begin, CandidatePoint const& 
 
             Path tail = rd->path_follow(from_cross(rd,outer_cross.second).where, end.where);
             assert ( ! tail.infinity() );
-            
+
             if(head.length + tail.length > direct_pth.length){
-                return direct_pth;
+                return attach_timestamp(direct_pth, begin, end);
             }else{
                 //Path body = shortest_path(outer_cross.first, outer_cross.second);
 
@@ -704,11 +793,13 @@ Path Network::_shortest_path(CandidatePoint const& begin, CandidatePoint const& 
 
 
                 if(direct_pth.length < head.length + body.length + tail.length){
-                    return direct_pth;
+                    return attach_timestamp(direct_pth, begin, end);
                 }else{
-                    assert( head.append(body) );
-                    assert( head.append(tail) );
-                    return head;//maybe inf
+                    bool should_success = ( head.append(body) );
+                    assert(should_success);
+                    should_success = ( head.append(tail) );
+                    assert(should_success);
+                    return attach_timestamp(head, begin, end);//maybe inf
                 }
             }
         }else{//single pass
@@ -716,24 +807,26 @@ Path Network::_shortest_path(CandidatePoint const& begin, CandidatePoint const& 
             if(begin.where < end.where){
                 Path direct_pth = rd->path_follow(begin.where, end.where);
                 assert( not direct_pth.empty() and not direct_pth.infinity() );
-                
-                return direct_pth;
+
+                return attach_timestamp(direct_pth, begin,end);
             }else{
 
                 auto outer_cross = outer(begin, end);
                 Path head = rd->path_follow(begin.where, from_cross(rd, outer_cross.first).where);
                 assert( not head.infinity() );
-                
+
                 Path tail = rd->path_follow(from_cross(rd,outer_cross.second).where, end.where);
                 assert( not tail.infinity() );
-                
-                
+
+
                 //may be inf
                 Path body = (this->*cross2cross_shortest_path)(outer_cross.first, outer_cross.second);
 
-                assert( head.append(body) );
-                assert( head.append(tail) );
-                return head;//maybe inf
+                bool should_success = ( head.append(body) );
+                assert(should_success);
+                should_success = ( head.append(tail) );
+                assert(should_success);
+                return attach_timestamp(head, begin, end);//maybe inf
             }
         }
     }else {
@@ -762,15 +855,17 @@ Path Network::_shortest_path(CandidatePoint const& begin, CandidatePoint const& 
 
 
                 Path body = (this->*cross2cross_shortest_path)(after_begin, before_end);
-                assert( head.append(body) );
-                assert( head.append(tail) );//maybe inf
+                bool should_success = ( head.append(body) );
+                assert(should_success);
+                should_success = ( head.append(tail) );//maybe inf
+                assert(should_success);
 
                 if(head.length < min.length){
                     min = std::move(head);
                 }
             }
         }
-        return min;//maybe inf
+        return attach_timestamp(min, begin, end);//maybe inf
     }
 }
 
@@ -781,7 +876,7 @@ struct AstarNode{
     typedef shared_ptr<AstarNode> ptr;
     ptr parent;
     static std::shared_ptr<AstarNode> pointer(double g, double h, adjacent_edge const* edge, ptr parent = nullptr){
-        ptr p(new AstarNode); 
+        ptr p(new AstarNode);
         p->g = g;
         p->h = h;
         p->edge = (adjacent_edge*)edge;
@@ -924,9 +1019,9 @@ vector<Path> Network::k_shortest_path(Cross const& begin, Cross const& end, int 
 
 
 
-vector<adjacent_edge const*> 
-Network::shortest_path_Astar(int begin, int end, 
-        unordered_set<int> const& deleted_cross, 
+vector<adjacent_edge const*>
+Network::shortest_path_Astar(int begin, int end,
+        unordered_set<int> const& deleted_cross,
         unordered_set<adjacent_edge const*> const& deleted_edge)const{
 
     vector<adjacent_edge const*> pth;
@@ -1133,7 +1228,7 @@ CandidatePoint Network::project(Point const& p)const{
 
 /*
 void Network::split( int road_id, int cross_id )const{
-   RoadSegment const& road = _road_segment[road_id]; 
+   RoadSegment const& road = _road_segment[road_id];
    Cross c = _cross[cross_id];
    CandidatePoint cp = road.candidate_of( c );
    auto lower_it = boost::lower_bound(road.points, cp, binary_of<less>(&CandidatePoint::where));
@@ -1158,7 +1253,7 @@ void Network::split( int road_id, int cross_id )const{
    auto acc_fun = [](double init , boost::tuple<Point const&,Point const&> const& tup){
             return init = tup.get<0>().gis_dist(tup.get<1>());
            };
-   double left_length = boost::accumulate( left | boost::adjacented, 0.0,acc_fun); 
+   double left_length = boost::accumulate( left | boost::adjacented, 0.0,acc_fun);
    double right_length = boost::accumulate( right | boost::adjacented, 0.0, acc_fun );
 
    double lx[left.size()];
@@ -1228,7 +1323,9 @@ void Network::save_cross_to_map(string const& name)const{
     DBFAddField(dbf, "id", FTInteger, 10, 0);
     DBFAddField(dbf, "DBID", FTString, 16, 0);
     for( Cross const& c : _cross ){
-        SHPObject* obj = SHPCreateSimpleObject(SHPT_POINT, 1, & c.x, & c.y, nullptr);
+        double x = c.x;
+        double y = c.y;
+        SHPObject* obj = SHPCreateSimpleObject(SHPT_POINT, 1, & x, & y, nullptr);
         int id = SHPWriteObject(shp, -1, obj);
         DBFWriteIntegerAttribute(dbf, id, 0, c.id);
         DBFWriteStringAttribute(dbf, id, 1, c.dbId.c_str());

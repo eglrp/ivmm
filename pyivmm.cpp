@@ -1,10 +1,12 @@
 #include  <boost/python.hpp>
+#include  <boost/python/suite/indexing/container_utils.hpp>
 #include  <boost/range/algorithm.hpp>
 #include  <algorithm>
 #include    "road.h"
 #include    "network.h"
 #include    "boost_python_converter.hpp"
 #include    "sample_generator.h"
+#include    "ivmm.h"
 
 namespace py = boost::python;
 
@@ -26,12 +28,10 @@ void point_setitem(Point & self, int index, double value){
 void export_points(){
     py::class_<Point>("Point")
         .def(py::init<double, double>())
-        .def_readwrite("x", &Point::x)
-        .def_readwrite("y", &Point::y)
-        .def("sqr_dist", (double (Point::*)(Point const&)const)&Point::sqr_dist)
-        .def("sqr_dist", (double (Point::*)(double, double)const)&Point::sqr_dist)
+        .def_readwrite("x", &Point::x, "x")
+        .def_readwrite("y", &Point::y, "x")
         .def("dist_to_segment", &point_dist_to_sement)
-        .def("gis_dist", &Point::gis_dist)
+        .def("gis_dist", &Point::gis_dist, "gis_dist(Point) compute the gis distance")
         .def(py::self == py::self)
         .def(py::self != py::self)
         .def(py::self += py::self)
@@ -48,22 +48,22 @@ void export_points(){
 void export_gpspoint(){
     py::class_<GpsPoint, py::bases<Point> >("GpsPoint")
         .def(py::init<double, double, double>())
-        .def_readwrite("timestamp", &GpsPoint::timestamp)
+        .def_readwrite("timestamp", &GpsPoint::timestamp, "timestamp")
         .def(py::self == py::self)
         .def(py::self != py::self);
 }
 
 void export_cross(){
     py::class_<Cross, py::bases<Point> >("Cross", py::no_init)
-        .def_readonly("id", &Cross::id)
+        .def_readonly("id", &Cross::id, "id")
         .def(py::self == py::self)
         .def(py::self != py::self);
 }
 
 void export_candidatepoint(){
     py::class_<CandidatePoint, py::bases<Point> >("CandidatePoint", py::no_init)
-        .def_readonly("belong", &CandidatePoint::belong)
-        .def("distance_from_begin", &CandidatePoint::distance_from_begin)
+        .def_readonly("belong", &CandidatePoint::belong, "belong which road")
+        .def("distance_from_begin", &CandidatePoint::distance_from_begin, "the gis distance from begin follow road")
         .def_readonly("where", &CandidatePoint::where)
         .def(py::self == py::self)
         .def(py::self != py::self)
@@ -117,10 +117,10 @@ void export_network(){
 
     //py::class_<Network, Network*>("Network",py::init<std::string const&, std::string const&>())
     py::class_<Network, Network*>("Network")
-        .def("load", (bool (Network::*)(std::string const&))& Network::load)
-        .def("load", (bool (Network::*)(std::string const&, std::string const&))&Network::load)
-        .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double)const)&Network::query)
-        .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double, int)const)&Network::query)
+        .def("load", (bool (Network::*)(std::string const&))& Network::load, "load(road shp filename")
+        .def("load", (bool (Network::*)(std::string const&, std::string const&))&Network::load, "faster load(road shp filename, cross shp filename")
+        .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double)const)&Network::query, "query(Point, double)")
+        .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double, int)const)&Network::query, "query(Point, double, int)")
         .def("shortest_path", (Path(Network::*)(int, int)const)&Network::shortest_path)
         .def("shortest_path", (Path(Network::*)(Cross const&, Cross const&)const)&Network::shortest_path)
         .def("shortest_path", (Path(Network::*)(CandidatePoint const&, CandidatePoint const&)const)&Network::shortest_path)
@@ -138,7 +138,11 @@ void export_network(){
         .def("road", (RoadSegment const* (Network::*)(int)const)&Network::road, py::return_value_policy<py::reference_existing_object>())
         .def("road", (RoadSegment const* (Network::*)(std::string const&)const)&Network::road, py::return_value_policy<py::reference_existing_object>())
         .def("project", &Network::project)
-        .def("save_cross_to_map", &Network::save_cross_to_map);
+        .def("save_cross_to_map", &Network::save_cross_to_map)
+        .def("contain_cross", (bool (Network::*)(int)const)&Network::contain_cross)
+        .def("contain_cross", (bool (Network::*)(std::string const&)const)&Network::contain_cross)
+        .def("contain_road", (bool (Network::*)(int)const)&Network::contain_road)
+        .def("contain_road", (bool (Network::*)(std::string const&)const)&Network::contain_road);
 }
 
 
@@ -181,12 +185,34 @@ void export_sample_generator(){
         .def("launch", &launch);
 }
 
+py::tuple ivmm_ivmm(IVMM const& ivmm, py::object gpslist, IVMMParam const& param){
+    std::vector<GpsPoint> gps;
+    py::container_utils::extend_container(gps, gpslist); 
+    CandidateGraph graph;
+    std::vector<size_t> best;
+    Path path = ivmm.ivmm(gps, param, &graph, &best);
+    return py::make_tuple(path, graph, best);
+}
+void export_ivmm(){
+    py::class_<IVMMParam>("IVMMParam")
+        .def_readwrite("radious", &IVMMParam::candidate_query_radious, "radious of query")
+        .def_readwrite("limit", &IVMMParam::candidate_limit, "limit of candidate")
+        .def_readwrite("beta",&IVMMParam::beta, "beta")
+        .def_readwrite("mu",&IVMMParam::project_dist_mean, "mean of dist")
+        .def_readwrite("sigma",&IVMMParam::project_dist_stddev, "stddev of dist");
+
+    py::class_<IVMM>("IVMM", py::init<Network*>())
+        .def("ivmm", &ivmm_ivmm, "ivmm(gps-list, param)=>(path, graph, best_pos)");
+}
 BOOST_PYTHON_MODULE(pyivmm){
+    to_python_converter().to_python<std::vector<size_t> >();
     export_points();
     export_cross();
     export_gpspoint();
     export_candidatepoint();
     export_roadsegment();
     export_network();
+    export_ivmm();
     export_sample_generator();
 }
+

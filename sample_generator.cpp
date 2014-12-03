@@ -5,7 +5,7 @@
 using namespace std;
 
 
-vector<SampleResult> 
+vector<SampleResult>
 SampleGenerator::launch(int begin, int end, int k, LaunchParam const& param){
     vector<Path> paths = network->k_shortest_path_Yen(begin, end, k);
     vector<SampleResult> results;
@@ -49,16 +49,16 @@ double v = param.speed_confidence * path.points.front().belong->speed / 3.6;//åˆ
 vector<GpsPoint> SampleGenerator::create(std::vector<SampleOriginalPoint> const& org, LaunchParam const& param){
     vector<GpsPoint> gps_points;
     normal_distribution<> n;
-    double degree_test = 0.00001;
+    //double degree_test = 0.00001;
     for(auto& p : org){
-        Point lng = p;
-        lng.x += degree_test;
-        Point lat = p;
-        lat.y += degree_test;
-        double lng_pre_meter = degree_test / lng.gis_dist(p);
-        double lat_pre_meter = degree_test / lat.gis_dist(p);
-        normal_distribution<>::param_type xp(p.x, lng_pre_meter * param.gps_sample_stddev);
-        normal_distribution<>::param_type yp(p.y, lat_pre_meter * param.gps_sample_stddev);
+        //Point lng = p;
+        //lng.x += degree_test;
+        //Point lat = p;
+        //lat.y += degree_test;
+        //double lng_pre_meter = degree_test / lng.gis_dist(p);
+        //double lat_pre_meter = degree_test / lat.gis_dist(p);
+        normal_distribution<>::param_type xp(p.x, param.gps_sample_stddev);
+        normal_distribution<>::param_type yp(p.y, param.gps_sample_stddev);
         GpsPoint gps_p;
         gps_p.timestamp = p.timestamp;
         gps_p.x = n(_random_engin, xp);

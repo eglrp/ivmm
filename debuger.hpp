@@ -7,10 +7,10 @@
 #include  <fstream>
 #include    "network.h"
 #include    "road.h"
-#include    "json.h"
 #include    "range_extend.hpp"
 
 
+/*
 class SimpleDebugDump{
 public:
     SimpleDebugDump(){
@@ -68,7 +68,7 @@ public:
         _features.append(Json::EasyPutValue()
                 .add("type", "Feature")
                 .add("geometry", Json::EasyPutValue().append(a.geojson_geometry()).append(b.geojson_feature()))
-                .add("properties", 
+                .add("properties",
                     Json::EasyPutValue()
                     .add("class", _class)
                     .add("length", a.gis_dist(b))
@@ -116,7 +116,7 @@ public:
         _features.append(
         Json::EasyPutValue().add("type", "Feature")
             .add("geometry", path.geojson_geometry())
-            .add("properties", 
+            .add("properties",
                     Json::EasyPutValue()
                         .add("class", _class)
                         .add("length", path.length)
@@ -146,6 +146,6 @@ private:
     Json::EasyPutValue _features;
 };
 
-
+*/
 
 #endif  /*DEBUGER_H*/

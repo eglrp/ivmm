@@ -21,7 +21,7 @@ struct with_cleanup{};
 
 template<typename InputIterator, typename BinaryFunction>
 BinaryFunction foreach_adjacent(InputIterator first, InputIterator last, BinaryFunction fun){
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     while(first != last and second != last){
         fun(*first++, *second++);
     }
@@ -36,12 +36,12 @@ inline BinaryFunction foreach_adjacent(SinglePassRange && rng, BinaryFunction fu
 template<typename Tag, typename InputIterator, typename UnaryFunction,typename BinaryFunction>
 typename std::enable_if<
     std::is_same<with_prepare,Tag>::value,
-    BinaryFunction>::type 
+    BinaryFunction>::type
 
 foreach_adjacent(InputIterator first, InputIterator last, UnaryFunction prepare, BinaryFunction fun){
     if (first != last)
         prepare(*first);
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     while(first != last and second != last){
         fun(*first++, *second++);
     }
@@ -52,8 +52,7 @@ foreach_adjacent(InputIterator first, InputIterator last, UnaryFunction prepare,
 template<typename Tag, typename SinglePassRange, typename UnaryFunction,typename BinaryFunction>
 inline typename std::enable_if<
     std::is_same<with_prepare,Tag>::value,
-    BinaryFunction>::type 
-
+    BinaryFunction>::type
 foreach_adjacent(SinglePassRange&& rng, UnaryFunction prepare, BinaryFunction fun){
     return foreach_adjacent<Tag>(boost::begin(std::forward<SinglePassRange>(rng)), boost::end(std::forward<SinglePassRange>(rng)),
                 prepare, fun
@@ -68,7 +67,7 @@ typename std::enable_if<
     >::type
 
 foreach_adjacent(InputIterator first, InputIterator last, BinaryFunction fun, UnaryFunction cleanup){
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     if(second == last)
         cleanup(*first);
     while(first != last and second != last){
@@ -92,7 +91,7 @@ inline foreach_adjacent(SinglePassRange&& rng, BinaryFunction fun, UnaryFunction
 
 template<typename InputIterator, typename OutputIterator, typename BinaryFunction>
 OutputIterator copy_adjacent(InputIterator first, InputIterator last, OutputIterator d_first, BinaryFunction fun){
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     while(first != last and second != last){
         *d_first++ = fun(*first++, *second++);
     }
@@ -110,7 +109,7 @@ typename std::enable_if<
     std::is_same<Tag, with_prepare>::value,
     OutputIterator>::type
 copy_adjacent(InputIterator first, InputIterator last, OutputIterator d_first, UnaryFunction prepare, BinaryFunction fun){
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     if(first != last)
         *d_first++ = prepare(*first);
     while(first != last and second != last){
@@ -135,7 +134,7 @@ typename std::enable_if<
     std::is_same<Tag, with_cleanup>::value,
     OutputIterator>::type
 copy_adjacent(InputIterator first, InputIterator last, OutputIterator d_first, BinaryFunction fun, UnaryFunction cleanup){
-    InputIterator second = first + 1;
+    InputIterator second = std::next(first, 1);
     if(second == last)
         *d_first++ = cleanup(*first);
     while(first != last and second != last){
@@ -228,7 +227,7 @@ struct adjacented_range:
             >
         >
     >{
-    
+
     typedef iterator_range<zip_iterator<tuple<BOOST_DEDUCED_TYPENAME range_iterator<ForwardRange>::type,
                     BOOST_DEDUCED_TYPENAME range_iterator<ForwardRange>::type>>> base_t;
 
@@ -242,13 +241,13 @@ struct adjacented_range:
 namespace detail{
 struct adjacented_forwarder{};
 template<typename ForwardRange>
-adjacented_range<ForwardRange> 
+adjacented_range<ForwardRange>
 operator|(ForwardRange& rng, adjacented_forwarder const&){
     return adjacented_range<ForwardRange>(rng);
 }
 
 template<typename ForwardRange>
-adjacented_range<const ForwardRange> 
+adjacented_range<const ForwardRange>
 operator|(ForwardRange const& rng, adjacented_forwarder const&){
     return adjacented_range<const ForwardRange>(rng);
 }
