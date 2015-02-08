@@ -63,6 +63,13 @@ public:
     {
         return _path->points.empty() or first == _path->points.end();
     }
+
+    PathPoint pathpoint()const{
+        if ( isFirst() ){
+            return *second;
+        }
+        return *first;
+    }
     typedef decltype(std::declval<PathType>().points.begin()) iterator;
     iterator first;
     iterator second;

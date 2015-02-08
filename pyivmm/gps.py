@@ -138,32 +138,38 @@ class GisGpsLoaderController(QObject):
 
         f = open(trajFileName)
         l = []
-        for line in f.readlines():
-            items = line.split(',')
-            r = self.network.road(items[0])
-            c1 = self.network.cross(items[1])
-            c2 = self.network.cross(items[2])
-            enterTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(items[3])))
-            leaveTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(items[4])))
-            cost = long(items[5])
-            l.append( ( r, c1, c2, enterTime, leaveTime, cost))
+        lines = f.readlines()
+        for i in range(len(lines)-1):
+            line1 = lines[i]
+            line2 = lines[i+1]
+            it1 = line1.split(',')
+            it2 = line2.split(',')
+            crossBegin = it1[0]
+            crossEnd = it2[0]
+            edge = self.network.edge(crossBegin, crossEnd)
+            c1 = self.network.cross(crossBegin)
+            c2 = self.network.cross(crossEnd)
+            #r = self.network.road(items[0])
+            enterTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(it1[2])))
+            leaveTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(it2[2])))
+            cost = long(it2[2]) - long(it1[2])
+            l.append( ( edge, c1, c2, enterTime, leaveTime, cost))
 
         trajLayer = QgsVectorLayer(
-            "LineString?crs=epsg:3785&field=id:integer&field=road:string&field=enter:string&field=leave:string&field=cost:integer&index=yes",
+            "LineString?crs=epsg:3785&field=id:integer&field=road:string&field=enterCross:string&field=leaveCross:string&field=enter:string&field=leave:string&field=cost:integer&index=yes",
             "traj-"+os.path.basename( trajFileName),
             "memory")
         dp = trajLayer.dataProvider()
         feats= []
-        for i, (r, c1, c2, enterTime, leaveTime, cost) in enumerate(l):
-            feat = QgsFeature()
-            points = []
-            for p in r.points:
-                points.append(QgsPoint(p.x, p.y))
-            if r.begin == c2:
-                points.reverse()
-            feat.setGeometry(QgsGeometry.fromPolyline(points))
-            feat.setAttributes([i, r.dbID, enterTime, leaveTime, cost])
-            feats.append(feat)
+        for i, (edge, c1, c2, enterTime, leaveTime, cost) in enumerate(l):
+            if edge:
+                feat = QgsFeature()
+                points = []
+                for p in edge.points():
+                    points.append(QgsPoint(p.x, p.y))
+                feat.setGeometry(QgsGeometry.fromPolyline(points))
+                feat.setAttributes([i, edge.road.dbID,c1.dbID, c2.dbID, enterTime, leaveTime, cost])
+                feats.append(feat)
 
         dp.addFeatures(feats)
         dp.updateExtents()

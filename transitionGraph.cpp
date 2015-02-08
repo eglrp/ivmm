@@ -4,13 +4,36 @@
 #include  <fstream>
 #include  <boost/filesystem.hpp>
 #include  <iostream>
+#include  <boost/algorithm/string.hpp>
+#include  <boost/range/numeric.hpp>
 #include  <boost/range/algorithm.hpp>
+#include  <boost/range/algorithm_ext.hpp>
+#include  <boost/range/adaptors.hpp>
+#include  <boost/assign.hpp>
+#include  <boost/range/algorithm_ext.hpp>
+#include  <queue>
 #include    "simple_guard.hpp"
 #include    "key_visitor.hpp"
-#include  <queue>
 using namespace std;
 namespace fs = boost::filesystem;
 
+
+void TransitionGraph::uplift(){
+    double minP = numeric_limits<double>::max();
+    for (CrossInfo const & info : crossInfo_){
+        for (Transition const & t : info.adjacent){
+            if ( t.p != 0 && t.p < minP ){
+                minP = t.p;
+            }
+        }
+    }
+    for (CrossInfo & info : crossInfo_){
+        for (Transition & t : info.adjacent){
+            t.p = (1 - minP ) * t.p + minP;
+        }
+    }
+
+}
 TransitionGraph::TransitionGraph(Network& network)
     :network_(network)
 {
@@ -20,12 +43,13 @@ TransitionGraph::TransitionGraph(Network& network)
         {
             crossInfo_[i].id = i;
             crossInfo_[i].adjacent.push_back({&edge, 0.0, 0});
-            crossInfo_[i].outs.push_back(&crossInfo_[i].adjacent.back());
         }
 
     for(CrossInfo & cinfo : crossInfo_)
-        for(Transition & t : cinfo.adjacent )
+        for(Transition & t : cinfo.adjacent ){
             crossInfo_[t.source->end].ins.push_back(&t);
+            crossInfo_[t.source->begin].outs.push_back(&t);
+        }
 }
 
 
@@ -119,16 +143,17 @@ struct TNode
     Transition const* t;
     double accP;
     int cID;
+    string dbID;
 };
 struct TNodeAlloc
 {
-    TNode* alloc(TNode* parent, Transition const* t, double accP, int cId)
+    TNode* alloc(TNode* parent, Transition const* t, double accP, int cId, string const& dbID)
     {
-        TNode node = {parent , t, accP, cId};
+        TNode node = {parent , t, accP, cId, dbID};
         buf.push_back(node);
         return &buf.back();
     }
-    vector<TNode> buf;
+    list<TNode> buf;
 };
 namespace std
 {
@@ -140,12 +165,13 @@ namespace std
         }
     };
 }
-vector<Transition const*> TransitionGraph::max_probabiliy_sequence(int begin, int end)const
-{
+
+vector<Transition const*> TransitionGraph::max_probabiliy_with_delete_edge_and_cross(int begin, int end, 
+        unordered_set<Transition const*> const& deleted_edge, unordered_set<int> const& deleted_cross)const{
     priority_queue<TNode*> q;
     TNodeAlloc nodeBuf;
     unordered_set<int> closed;
-    q.push(nodeBuf.alloc(nullptr, nullptr, 1.0, begin));
+    q.push(nodeBuf.alloc(nullptr, nullptr, 1.0, begin, network_.cross(begin).dbId));
     vector<Transition const*> result;
     if ( ! network_.contain_cross(begin) || !network_.contain_cross(end) )
         return result;
@@ -166,33 +192,22 @@ vector<Transition const*> TransitionGraph::max_probabiliy_sequence(int begin, in
 
         if ( closed.count(top->cID) )
             continue;
+        else
+            closed.insert(top->cID);
 
         for (Transition const* t : crossInfo_[top->cID].outs)
         {
-            if ( closed.count(t->source->end) ) continue;
-            q.push(nodeBuf.alloc(top, t, top->accP * t->p, t->source->end));
+            if ( closed.count(t->source->end) || deleted_edge.count(t) || deleted_cross.count(t->source->end)) continue;
+            TNode* adjNode = nodeBuf.alloc(top, t, top->accP * t->p, t->source->end, network_.cross(t->source->end).dbId);
+            q.push(adjNode);
         }
     }
     return result;
+
 }
 
-struct CrossWrap{
-    CrossWrap(vector<Transition const*> & seq):seq(seq){}
-    vector<Transition const*> & seq;
-    int operator[](size_t idx)const{
-        if ( idx == seq.size() ) return seq.back()->source->end;
-        return seq.at(idx)->source->begin;
-    }
-    size_t size()const{
-        if ( seq.size() == 0 ) return 0;
-        return seq.size() + 1;
-    }
-};
-
-#include  <boost/algorithm/string.hpp>
-
-
-bool stillHasOutEdgs(CrossInfo const& source, unordered_set<Transition const*> const& deleted_edge, unordered_set<int> const& deleted_cross)
+bool stillHasOutEdges(CrossInfo const& source, 
+        unordered_set<Transition const*> const& deleted_edge, unordered_set<int> const& deleted_cross)
 {
     for(Transition const* t: source.outs){
         if ( deleted_edge.count(t)  == 0 && deleted_cross.count(t->source->end) == 0 ){
@@ -200,6 +215,10 @@ bool stillHasOutEdgs(CrossInfo const& source, unordered_set<Transition const*> c
         }
     }
     return true;
+}
+double accumulated_probability(std::vector<Transition const*> const& path){
+    return boost::accumulate(path | boost::adaptors::transformed([](Transition const* t){return t->p;}),
+            1.0, [](double init, double p ){ return init * p; });
 }
 SequencePair const* MaxProbabilitySequenceGenerator::next()
 {
@@ -223,10 +242,15 @@ SequencePair const* MaxProbabilitySequenceGenerator::next()
             }
         }
 
-        int node = kth.first.at(i)->source->begin;
-        if ( stillHasOutEdgs( tgrap_.crossInfo_[node], deleted_edge, deleted_cross ) )
+        int deviate_start_node = kth.first.at(i)->source->begin;
+        if ( stillHasOutEdges( tgrap_.crossInfo_[deviate_start_node], deleted_edge, deleted_cross ) )
         {
-            //vector<Transition const*> supr 
+            vector<Transition const*> supr = tgrap_.max_probabiliy_with_delete_edge_and_cross
+                (deviate_start_node, end_, deleted_edge, deleted_cross);
+            vector<Transition const*> deviated_path;
+            boost::push_back(boost::push_back(deviated_path, root), supr);
+            double accP = accumulated_probability(deviated_path);
+            tops_.push({ std::move(deviated_path), accP });
         }
 
         deleted_cross.insert(kth.first.at(i)->source->begin);
@@ -234,3 +258,12 @@ SequencePair const* MaxProbabilitySequenceGenerator::next()
     }
     return &topk_.back();
 }
+
+
+MaxProbabilitySequenceGenerator::MaxProbabilitySequenceGenerator(TransitionGraph const& grap, int begin, int end):tgrap_(grap),begin_(begin), end_(end){
+    auto seq = grap.max_probabiliy_sequence(begin, end);
+    double p = accumulated_probability(seq);
+    tops_.push( { std::move(seq), p } );
+}
+
+

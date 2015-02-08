@@ -3,7 +3,7 @@ project (ivmm)
 
 
 find_package(PythonLibs REQUIRED)
-find_package(Boost REQUIRED COMPONENTS python unit_test_framework program_options filesystem system)
+find_package(Boost REQUIRED COMPONENTS python unit_test_framework program_options filesystem system serialization)
 
 add_compile_options(-std=c++11 -fPIC)
 
@@ -15,9 +15,9 @@ set(IVMM_SRC
     util.cpp
     road.cpp
     network.cpp
-    ivmm.cpp
-    sample_generator.cpp
+    ivmm.cpp 
     evaluation.cpp
+    io.cpp
 )
 
 
@@ -39,7 +39,6 @@ target_link_libraries(test
     ivmm_static
     ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
-    format
 )
 
 add_library(pyivmm SHARED
@@ -73,15 +72,15 @@ target_link_libraries(ivmm_main
     format
 )
 
-add_executable(smooth_traj
-    smooth_traj.cpp
-)
-
-target_link_libraries(smooth_traj
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-)
+#add_executable(smooth_traj
+#    smooth_traj.cpp
+#)
+#
+#target_link_libraries(smooth_traj
+#    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+#    ${Boost_FILESYSTEM_LIBRARY}
+#    ${Boost_SYSTEM_LIBRARY}
+#)
 
 add_executable( edge_time_collector
     edge_time_collector.cpp
@@ -155,22 +154,61 @@ target_link_libraries(candidateRoadGraphGenerator
     ivmm_static
 )
 
-add_executable(drawCPNet
-    drawcpn.cpp
-    transitionGraph.cpp
+add_executable(trajQueryServer
+    trajQueryServer.cpp
 )
 
-target_link_libraries(drawCPNet
+target_link_libraries(trajQueryServer
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_SERIALIZATION_LIBRARY}
+    ivmm_static
+)
+
+add_executable(trajDraw
+    trajDraw.cpp
+)
+
+target_link_libraries(trajDraw
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ivmm_static
 )
 
-add_executable(dumpCross
-    dumpCross.cpp
+
+add_executable(kmaxpath
+    kmaxpath.cpp
+    transitionGraph.cpp
 )
 
-target_link_libraries(dumpCross
+target_link_libraries(kmaxpath
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
     ivmm_static
 )
+
+add_executable(topk_weight_cross
+    topk_weight_cross.cpp
+)
+
+target_link_libraries(topk_weight_cross
+    ivmm_static
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+add_executable(timeCollect
+    timeCollect.cpp
+)
+
+target_link_libraries(timeCollect
+    ivmm_static
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+)
+

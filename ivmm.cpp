@@ -421,6 +421,12 @@ vector<StaticMatrix> IVMM::build_static_matrixs_ex(
                 double v = (dist + 1) / (linked_path.length + 1);
                 matrixs[i]._c[target] = c;
                 matrixs[i]._v[source][target] = v;
+                //TODO
+                if ( matrixs[i]._v[source][target] > 1.0 ){
+                    matrixs[i]._v[source][target] = 1.0;
+                }
+                matrixs[i]._v[source][target] *= matrixs[i]._v[source][target];
+
                 //fs
                 if ( linked_path.infinity() ){
                     matrixs[i]._ft[source][target] = - numeric_limits<double>::infinity();

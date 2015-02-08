@@ -60,7 +60,11 @@ public:
         return nullptr;
     }
 
-    std::vector<Transition const*> max_probabiliy_sequence(int begin, int end)const;
+    std::vector<Transition const*> max_probabiliy_sequence(int begin, int end)const{
+        std::unordered_set<Transition const*> no_deleted_edge;
+        std::unordered_set<int> no_deleted_cross;
+        return max_probabiliy_with_delete_edge_and_cross(begin, end, no_deleted_edge, no_deleted_cross);
+    }
     std::vector<Transition const*> max_probabiliy_sequence(Cross const& begin, Cross const& end)const{
         return max_probabiliy_sequence(begin.id, end.id);
     }
@@ -70,8 +74,8 @@ public:
             return max_probabiliy_sequence(network_.cross(begin), network_.cross(end));
         return {};
     }
-private:
-    void modifyTransition(){}
+    void uplift();
+//private:
     friend class MaxProbabilitySequenceGenerator;
     std::vector<Transition const*> max_probabiliy_with_delete_edge_and_cross(int begin, int end, 
          std::unordered_set<Transition const*> const& deleted_edge, std::unordered_set<int> const& deleted_cross)const;
@@ -83,7 +87,7 @@ private:
 typedef std::pair<std::vector<Transition const*>, double> SequencePair;
 class MaxProbabilitySequenceGenerator{
 public:
-    MaxProbabilitySequenceGenerator(TransitionGraph const& grap, int begin, int end):tgrap_(grap),begin_(begin), end_(end){}
+    MaxProbabilitySequenceGenerator(TransitionGraph const& grap, int begin, int end);
     SequencePair const* next();
 private:
     //std::unordered_set<int> deleted_cross_;

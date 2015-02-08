@@ -5,8 +5,8 @@
 #include    "road.h"
 #include    "network.h"
 #include    "boost_python_converter.hpp"
-#include    "sample_generator.h"
 #include    "ivmm.h"
+#include    "io.h"
 
 namespace py = boost::python;
 
@@ -56,6 +56,7 @@ void export_gpspoint(){
 void export_cross(){
     py::class_<Cross, py::bases<Point> >("Cross", py::no_init)
         .def_readonly("id", &Cross::id, "id")
+        .def_readonly("dbID", &Cross::dbId)
         .def(py::self == py::self)
         .def(py::self != py::self);
 }
@@ -93,9 +94,17 @@ void export_roadsegment(){
 
 
 void export_network(){
+
+    py::class_<adjacent_edge>("AdjacentEdge", py::no_init)
+        .def_readonly("begin", &adjacent_edge::begin)
+        .def_readonly("end", &adjacent_edge::end)
+        .def_readonly("road", &adjacent_edge::road)
+        .def("points", &adjacent_edge::points);
+
     py::class_<PathPoint, py::bases<CandidatePoint> >("PathPoint")
         .def_readonly("dist_of_path", &PathPoint::dist_of_path)
-        .def_readonly("cid", &PathPoint::cid);
+        .def_readonly("cid", &PathPoint::cid)
+        .def("cross", &PathPoint::cross, py::return_value_policy<py::reference_existing_object>());
 
 
     py::class_<std::vector<PathPoint> >("PathPointVector", py::no_init)
@@ -122,6 +131,7 @@ void export_network(){
         .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double)const)&Network::query, "query(Point, double)")
         .def("query", (std::vector<CandidatePoint>(Network::*)(Point const&, double, int)const)&Network::query, "query(Point, double, int)")
         .def("shortest_path", (Path(Network::*)(int, int)const)&Network::shortest_path)
+        .def("shortest_path", (Path(Network::*)(std::string const&, std::string const&)const)&Network::shortest_path)
         .def("shortest_path", (Path(Network::*)(Cross const&, Cross const&)const)&Network::shortest_path)
         .def("shortest_path", (Path(Network::*)(CandidatePoint const&, CandidatePoint const&)const)&Network::shortest_path)
         .def("shortest_path_Astar",(Path(Network::*)(int, int)const)&Network::shortest_path_Astar)
@@ -130,7 +140,8 @@ void export_network(){
                 &Network::k_shortest_path)
         .def("k_shortest_path", (std::vector<Path>(Network::*)(int, int, int)const)
                 &Network::k_shortest_path)
-        .def("k_shortest_path_Yen", &Network::k_shortest_path_Yen)
+        .def("k_shortest_path_Yen", (std::vector<Path>(Network::*)(int,int,int)const)&Network::k_shortest_path_Yen)
+        .def("k_shortest_path_Yen", (std::vector<Path>(Network::*)(std::string const&, std::string const&, int)const)&Network::k_shortest_path_Yen)
         .def("cross_bound", &Network::cross_bound)
         .def("roadsegment_bound", &Network::roadsegment_bound)
         .def("cross", (Cross const& (Network::*)(int)const)&Network::cross, py::return_value_policy<py::copy_const_reference>())
@@ -142,10 +153,15 @@ void export_network(){
         .def("contain_cross", (bool (Network::*)(int)const)&Network::contain_cross)
         .def("contain_cross", (bool (Network::*)(std::string const&)const)&Network::contain_cross)
         .def("contain_road", (bool (Network::*)(int)const)&Network::contain_road)
-        .def("contain_road", (bool (Network::*)(std::string const&)const)&Network::contain_road);
+        .def("contain_road", (bool (Network::*)(std::string const&)const)&Network::contain_road)
+        .def("edge", (adjacent_edge const* (Network::*)(int,int)const)&Network::edge, 
+                py::return_value_policy<py::reference_existing_object>())
+        .def("edge", (adjacent_edge const* (Network::*)(std::string const&,std::string const&)const)&Network::edge,
+                py::return_value_policy<py::reference_existing_object>());
 }
 
 
+/*
 SampleResult launch(SampleGenerator& s, py::list const& list, LaunchParam const& p){
     std::vector<int> crosses;
     py::container_utils::extend_container(crosses, list);
@@ -184,6 +200,7 @@ void export_sample_generator(){
         .def("launch", (std::vector<SampleResult>(SampleGenerator::*)(int ,int ,int , LaunchParam const&))&SampleGenerator::launch)
         .def("launch", &launch);
 }
+*/
 
 py::tuple ivmm_ivmm(IVMM const& ivmm, py::object gpslist, IVMMParam const& param){
     std::vector<GpsPoint> gps;
@@ -204,6 +221,7 @@ void export_ivmm(){
     py::class_<IVMM>("IVMM", py::init<Network*>())
         .def("ivmm", &ivmm_ivmm, "ivmm(gps-list, param)=>(path, graph, best_pos)");
 }
+
 BOOST_PYTHON_MODULE(pyivmm){
     to_python_converter().to_python<std::vector<size_t> >();
     export_points();
@@ -213,6 +231,5 @@ BOOST_PYTHON_MODULE(pyivmm){
     export_roadsegment();
     export_network();
     export_ivmm();
-    export_sample_generator();
+    //export_sample_generator();
 }
-

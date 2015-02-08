@@ -24,13 +24,21 @@ struct adjacent_edge{
     adjacent_edge()=default;
     adjacent_edge(int b, int e, RoadSegment const* r):
         begin(b),end(e),road((RoadSegment*)r){};
-};
 
+    std::vector<CandidatePoint>  points()const;
+};
 
 
 struct PathPoint: public CandidatePoint{
     PathPoint()=default;
     PathPoint(CandidatePoint const& c):CandidatePoint(c){}
+    Cross const* cross()const{
+        if ( cid == -1 ) return nullptr;
+        if ( cid == belong->begin.id ){
+            return & belong->begin;
+        }
+        return & belong->end;
+    }
     double dist_of_path = 0.0;
     int cid = -1;
 };
@@ -105,11 +113,24 @@ public:
     inline Path shortest_path(int begin, int end)const{
         return shortest_path(_cross[begin], _cross[end]);
     }
+    inline Path shortest_path(std::string const& begin, std::string const& end)const{
+        if (_cross_db_id_map.count(begin) && _cross_db_id_map.count(end) ){
+            return shortest_path(_cross_db_id_map.at(begin), _cross_db_id_map.at(end));
+        }
+        return {};
+    }
 
 
     Path shortest_path_Astar(Cross const& begin, Cross const& end)const;
     inline Path shortest_path_Astar(int begin, int end)const{
         return shortest_path_Astar(_cross[begin], _cross[end]);
+    }
+
+    inline Path shortest_path_Astar(std::string const& begin, std::string const& end)const{
+        if (_cross_db_id_map.count(begin) && _cross_db_id_map.count(end) ){
+            return shortest_path_Astar(_cross_db_id_map.at(begin), _cross_db_id_map.at(end));
+        }
+        return {};
     }
 
 
@@ -128,6 +149,12 @@ public:
     }
 
     std::vector<Path> k_shortest_path_Yen(int begin, int end, int k)const;
+    inline std::vector<Path> k_shortest_path_Yen(std::string const& begin, std::string const& end, int k)const{
+        if (_cross_db_id_map.count(begin) && _cross_db_id_map.count(end) ){
+            return k_shortest_path_Yen(_cross_db_id_map.at(begin), _cross_db_id_map.at(end), k);
+        }
+        return {};
+    }
 
 
     std::vector<adjacent_edge const*>
@@ -150,6 +177,10 @@ public:
 
     adjacent_edge const* edge(int from, int to)const
     {
+        if ( from < 0 || from >= _adjacent.size() )
+            return nullptr;
+        if ( to < 0 || to >= _adjacent.size() )
+            return nullptr;
         for (auto& e : _adjacent.at(from))
         {
             if (e.end == to)
@@ -160,6 +191,8 @@ public:
 
     adjacent_edge const* edge(std::string const& from, std::string const& to )const
     {
+        if ( _cross_db_id_map.count(from) == 0 ||  _cross_db_id_map.count(to) == 0)
+            return nullptr;
         int ifrom = _cross_db_id_map.at(from);
         int ito = _cross_db_id_map.at(to);
         return edge(ifrom ,ito);
@@ -189,6 +222,9 @@ public:
     bool contain_road(std::string const& id)const{
         return _road_db_id_map.count(id) > 0;
     }
+
+    bool dumpTrajPointToFile( std::string const& traj, std::string const& file )const;
+    bool dumpTrajPathToFile( std::string const& traj, std::string const& file )const;
 private:
     kdtree_node* _root = nullptr;
     std::vector<std::vector<adjacent_edge> > _adjacent;

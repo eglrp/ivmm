@@ -11,6 +11,7 @@
 #include  <boost/assign.hpp>
 #include  <boost/algorithm/cxx11/none_of.hpp>
 #include  <boost/filesystem.hpp>
+#include  <fstream>
 #include  <unordered_map>
 
 #include    "network.h"
@@ -23,6 +24,19 @@ using namespace std;
 using namespace boost::assign;
 
 const double sample_step = 200.0;
+
+
+vector<CandidatePoint> adjacent_edge::points()const{
+    vector<CandidatePoint> p;
+    if ( road != nullptr ){
+        p = road->points;
+        if ( begin == road->end.id ){
+            boost::reverse(p);
+        }
+    }
+    return p;
+}
+
 
 //=======================================================================
 void Path::estimate_time_at_cross()
@@ -434,8 +448,8 @@ bool Network::load(string const& shp){
             _cross.emplace_back(new_cross_id, enodeID, points.back().x, points.back().y);
         }
 
-        int begin_id = _cross_db_id_map[snodeID];
-        int end_id = _cross_db_id_map[enodeID];
+        int begin_id = _cross_db_id_map.at(snodeID);
+        int end_id = _cross_db_id_map.at(enodeID);
 
         _road_segment.emplace_back(new_road_id, dbid, speed, bidir, _cross[begin_id], _cross[end_id], points);
         _road_db_id_map[dbid] = new_road_id;
@@ -1341,3 +1355,82 @@ Network::~Network(){
     _cross.clear();
     _road_segment.clear();
 }
+
+
+bool Network::dumpTrajPointToFile( std::string const & traj, std::string const& file )const{
+    ifstream ifs(traj);
+    if ( ! ifs ) return false;
+    SHPHandle shp = SHPCreate(file.c_str(), SHPT_POINT);
+    if ( shp == nullptr ) return false;
+    DBFHandle dbf = DBFCreate(file.c_str());
+    if ( dbf == nullptr ) {
+        SHPClose(shp);
+        return false;
+    }
+
+    string cross;
+    string time;
+    long timestamp;
+    DBFAddField(dbf, "cross", FTString, 11, 0);
+    DBFAddField(dbf, "time", FTString, 20, 0);
+    DBFAddField(dbf, "timestamp", FTInteger, 10, 0);
+    while ( getline(ifs, cross, ',') && getline(ifs, time, ',') && ifs >> timestamp && ifs.ignore() ){
+        cout << cross << endl;
+        cout << time << endl;
+        cout << timestamp << endl;
+        double x = this->cross(cross).x; 
+        double y = this->cross(cross).y;
+        SHPObject* obj = SHPCreateSimpleObject(SHPT_POINT, 1, &x, &y , nullptr);
+        const int insert = -1;
+        int newID = SHPWriteObject(shp, insert, obj);
+        DBFWriteStringAttribute(dbf, newID, 0, cross.c_str());
+        DBFWriteStringAttribute(dbf, newID, 1, time.c_str());
+        DBFWriteIntegerAttribute(dbf, newID, 2, timestamp);
+        SHPDestroyObject(obj);
+    }
+    SHPClose(shp);
+    DBFClose(dbf);
+    return true;
+}
+
+bool Network::dumpTrajPathToFile( std::string const& traj, std::string const& file )const{
+    ifstream ifs(traj);
+    if ( ! ifs ) return false;
+    SHPHandle shp = SHPCreate(file.c_str(), SHPT_ARC);
+    if ( shp == nullptr ) return false;
+    DBFHandle dbf = DBFCreate(file.c_str());
+    if ( dbf == nullptr ) {
+        SHPClose(shp);
+        return false;
+    }
+
+    DBFAddField(dbf, "length", FTDouble, 10, 6);
+    DBFAddField(dbf, "timecost", FTInteger, 10, 0);
+    string cross;
+    long timestamp;
+    string preCross;
+    long preTimestamp;
+    getline(ifs, preCross, ',') && ifs.ignore(numeric_limits<streamsize>::max(), ',') && ifs >> preTimestamp && ifs.ignore();
+    while ( getline(ifs, cross, ',') && ifs.ignore(numeric_limits<streamsize>::max(), ',') && ifs >> timestamp && ifs.ignore() ){
+        adjacent_edge const* edge = this->edge(preCross, cross);
+        if ( edge ){
+            size_t sz = edge->road->points.size();
+            double x[sz];
+            double y[sz];
+            boost::transform(edge->road->points, x, key_of(&Point::x));
+            boost::transform(edge->road->points, y, key_of(&Point::y));
+            SHPObject* obj = SHPCreateSimpleObject(SHPT_ARC, sz, x, y, nullptr);
+            int const insert = -1;
+            int newID = SHPWriteObject(shp, insert, obj);
+            DBFWriteDoubleAttribute(dbf, newID, 0, edge->road->length);
+            DBFWriteIntegerAttribute(dbf, newID, 1, timestamp - preTimestamp);
+        }
+        preCross = std::move(cross);
+        preTimestamp = timestamp;
+    }
+    SHPClose(shp);
+    DBFClose(dbf);
+    return true;
+
+}
+

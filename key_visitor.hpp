@@ -1,9 +1,6 @@
 #ifndef  KEY_VISITOR_HPP
 #define  KEY_VISITOR_HPP
 
-
-
-
 #include  <utility>
 #include  <memory>
 

@@ -72,7 +72,7 @@ compile_flags_dict = {
     'c',
    ],
 'extension(.cpp|.cxx|.h|.hpp|.hh|.hxx)':[
-    '-std=gnu++11',
+    '-std=gnu++1y',
     '-x',
     'c++',
     '-I',
