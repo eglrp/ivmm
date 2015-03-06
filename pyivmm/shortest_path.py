@@ -62,9 +62,9 @@ class ShortestPathController:
             return
         self.points.append( pyivmm.Point( point.x(), point.y() ) )
         if len(self.points) == 1:
-            self.ui.beginPointLineEdit.setText("%g,%g"%(point.x(), point.y()))
+            self.ui.beginPointLineEdit.setText("%.3f,%.3f"%(point.x(), point.y()))
         elif len(self.points) == 2:
-            self.ui.endPointLineEdit.setText("%g,%g"%(point.x(), point.y()))
+            self.ui.endPointLineEdit.setText("%.3f,%.3f"%(point.x(), point.y()))
             self.mapCanvas.unsetMapTool(self.pointPickerTool)
             try:
                 self.doShortestPath()
